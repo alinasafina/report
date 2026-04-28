@@ -81,25 +81,24 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
             CellStyle headerStyle = wb.createCellStyle();
             headerStyle.setFont(boldFont);
 
-            // ---------- Sheet 1: Summary ----------
-            Sheet s1 = wb.createSheet("2.1 Количество возвратов по спринтам");
+            Sheet sheet = wb.createSheet("2. Возвраты по задачам");
             int r = 0;
 
-            Row m1 = s1.createRow(r++);
+            Row m1 = sheet.createRow(r++);
             m1.createCell(0).setCellValue("Из статуса");
             m1.createCell(1).setCellValue(formatStatusListOrAll(f.fromIdsOriginal(), statusNamesById));
 
-            Row m2 = s1.createRow(r++);
+            Row m2 = sheet.createRow(r++);
             m2.createCell(0).setCellValue("В статус");
             m2.createCell(1).setCellValue(formatStatusListOrAll(f.toIdsOriginal(), statusNamesById));
 
-            Row m3 = s1.createRow(r++);
+            Row m3 = sheet.createRow(r++);
             m3.createCell(0).setCellValue("Сотрудник");
             m3.createCell(1).setCellValue(String.join(", ", f.employees()));
 
             r++; // empty row
 
-            Row header = s1.createRow(r++);
+            Row header = sheet.createRow(r++);
             header.createCell(0).setCellValue("Спринт");
             header.createCell(1).setCellValue("Сотрудник");
             header.createCell(2).setCellValue("Из статуса");
@@ -109,22 +108,19 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
             }
 
             for (TransitionReportRow row : summaryRows) {
-                Row x = s1.createRow(r++);
+                Row x = sheet.createRow(r++);
                 x.createCell(0).setCellValue(nullSafe(row.getSprintName()));
                 x.createCell(1).setCellValue(nullSafe(row.getEmployee()));
                 x.createCell(2).setCellValue(nullSafe(row.getFromStatusName()));
                 x.createCell(3).setCellValue(row.getTransitionsCount() == null ? 0 : row.getTransitionsCount());
             }
 
-            s1.setAutoFilter(new CellRangeAddress(header.getRowNum(), header.getRowNum(), 0, 3));
-            for (int i = 0; i < 4; i++) s1.autoSizeColumn(i);
-            s1.setColumnWidth(1, 35 * 256);
+            for (int i = 0; i < 4; i++) sheet.autoSizeColumn(i);
+            sheet.setColumnWidth(1, 35 * 256);
 
-            // ---------- Sheet 2: Details ----------
-            Sheet s2 = wb.createSheet("2.2 Возвраты по задачам");
-            int d = 0;
+            r++;
 
-            Row dh = s2.createRow(d++);
+            Row dh = sheet.createRow(r++);
             dh.createCell(0).setCellValue("Спринт");
             dh.createCell(1).setCellValue("Сотрудник");
             dh.createCell(2).setCellValue("Номер задачи");          // "название задачи" => issue_key
@@ -136,7 +132,7 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
             }
 
             for (TransitionDetailRow row : detailRows) {
-                Row x = s2.createRow(d++);
+                Row x = sheet.createRow(r++);
                 x.createCell(0).setCellValue(nullSafe(row.getSprintName()));
                 x.createCell(1).setCellValue(nullSafe(row.getDeveloper()));
                 x.createCell(2).setCellValue(nullSafe(row.getIssueKey()));
@@ -145,8 +141,9 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
                 x.createCell(5).setCellValue(formatDate(row.getTransitionDate()));
             }
 
-            s2.setAutoFilter(new CellRangeAddress(dh.getRowNum(), dh.getRowNum(), 0, 5));
-            for (int i = 0; i < 6; i++) s2.autoSizeColumn(i);
+            sheet.setAutoFilter(new CellRangeAddress(dh.getRowNum(), dh.getRowNum(), 0, 5));
+            for (int i = 0; i < 6; i++) sheet.autoSizeColumn(i);
+            sheet.setColumnWidth(1, 35 * 256);
 
             wb.write(baos);
             return baos.toByteArray();
