@@ -11,6 +11,7 @@ import ru.paperless.report.repository.JiraSprintEmployeeEffortRepository;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 
 @Service
@@ -67,6 +68,10 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             h1.createCell(3).setCellValue("Соответсвует оценке");
             h1.createCell(4).setCellValue("Несоответсвует оценке");
             h1.createCell(5).setCellValue("Без оценки разработки");
+            h1.createCell(6).setCellValue("Незатрекано время");
+            for (int i = 0; i <= 6; i++) {
+                h1.getCell(i).setCellStyle(headerStyle);
+            }
 
             for (SummaryRow sr : summaryRows) {
                 Row x = s1.createRow(r1++);
@@ -76,9 +81,11 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
                 x.createCell(3).setCellValue(sr.loggedLeFirstCount);
                 x.createCell(4).setCellValue(sr.loggedGtFirstCount);
                 x.createCell(5).setCellValue(sr.firstEqZeroCount);
+                x.createCell(6).setCellValue(sr.zeroLoggedWithEstimateCount);
             }
 
-            for (int i = 0; i <= 5; i++) s1.autoSizeColumn(i);
+            s1.setAutoFilter(new CellRangeAddress(h1.getRowNum(), h1.getRowNum(), 0, 6));
+            for (int i = 0; i <= 6; i++) s1.autoSizeColumn(i);
 
             // ===================== Sheet 2: Details =====================
             Sheet s2 = wb.createSheet("3.3 Соответсвия оценке по задачам");
@@ -91,7 +98,11 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             h2.createCell(3).setCellValue("Задача");
             h2.createCell(4).setCellValue("Эпик");
             h2.createCell(5).setCellValue("Оценка разработки");
-            h2.createCell(6).setCellValue("Списано часов");
+            h2.createCell(6).setCellValue("Затрекано времени");
+            h2.createCell(7).setCellValue("% от оценки");
+            for (int i = 0; i <= 7; i++) {
+                h2.getCell(i).setCellStyle(headerStyle);
+            }
 
             int dataStartRow = r2;
             int estCellIndex = 5;
@@ -111,13 +122,17 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
 
                 Cell logCell = x.createCell(logCellIndex);
                 setNumeric(logCell, row.getLoggedHours());
+
+                Cell percentCell = x.createCell(7);
+                setPercentFromEstimate(percentCell, row.getFirstEstimateHours(), row.getLoggedHours());
             }
 
             int dataEndRow = r2 - 1;
             if (!detailRows.isEmpty()) {
                 applyConditionalFormattingForDetails(s2, dataStartRow, dataEndRow, estCellIndex, logCellIndex);
             }
-            for (int i = 0; i <= 6; i++) s2.autoSizeColumn(i);
+            s2.setAutoFilter(new CellRangeAddress(h2.getRowNum(), h2.getRowNum(), 0, 7));
+            for (int i = 0; i <= 7; i++) s2.autoSizeColumn(i);
 
             // ===================== Sheet 3: Info =====================
             Sheet s3 = wb.createSheet("3.1 Соответсвие оценке по сотрудникам");
@@ -134,7 +149,8 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             hs.createCell(5).setCellValue("Соответсвует оценке");
             hs.createCell(6).setCellValue("Несоответсвует оценке");
             hs.createCell(7).setCellValue("Без оценки разработки");
-            for (int i = 0; i <= 7; i++) {
+            hs.createCell(8).setCellValue("Незатрекано время");
+            for (int i = 0; i <= 8; i++) {
                 if (hs.getCell(i) != null) {
                     hs.getCell(i).setCellStyle(headerStyle);
                 }
@@ -155,10 +171,11 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
                 row.createCell(5).setCellValue(t.loggedLeFirstCount);
                 row.createCell(6).setCellValue(t.loggedGtFirstCount);
                 row.createCell(7).setCellValue(t.firstEqZeroCount);
+                row.createCell(8).setCellValue(t.zeroLoggedWithEstimateCount);
             }
 
-            for (int i = 0; i <= 7; i++) s3.autoSizeColumn(i);
-            s3.setAutoFilter(new CellRangeAddress(hs.getRowNum(), hs.getRowNum(), 4, 7));
+            for (int i = 0; i <= 8; i++) s3.autoSizeColumn(i);
+            s3.setAutoFilter(new CellRangeAddress(hs.getRowNum(), hs.getRowNum(), 4, 8));
 
             wb.setSheetOrder(s3.getSheetName(), 0);
             wb.setSheetOrder(s1.getSheetName(), 1);
@@ -197,7 +214,14 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
         String firstRef = "$" + colLetter(estCol) + excelRow;
         String loggedRef = "$" + colLetter(logCol) + excelRow;
 
-        String greenFormula = "AND(" + firstRef + "<>0," + loggedRef + "<=" + firstRef + ")";
+        String orangeFormula = "AND(" + firstRef + ">0," + loggedRef + "=0)";
+        ConditionalFormattingRule orangeRule = scf.createConditionalFormattingRule(orangeFormula);
+        PatternFormatting orangeFill = orangeRule.createPatternFormatting();
+        orangeFill.setFillForegroundColor(IndexedColors.LIGHT_ORANGE.getIndex());
+        orangeFill.setFillBackgroundColor(IndexedColors.LIGHT_ORANGE.getIndex());
+        orangeFill.setFillPattern(PatternFormatting.SOLID_FOREGROUND);
+
+        String greenFormula = "AND(" + firstRef + "<>0," + loggedRef + "<=" + firstRef + "," + loggedRef + "<>0)";
         ConditionalFormattingRule greenRule = scf.createConditionalFormattingRule(greenFormula);
         PatternFormatting greenFill = greenRule.createPatternFormatting();
         greenFill.setFillForegroundColor(IndexedColors.LIGHT_GREEN.getIndex());
@@ -218,7 +242,7 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
         greyFill.setFillBackgroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
         greyFill.setFillPattern(PatternFormatting.SOLID_FOREGROUND);
 
-        scf.addConditionalFormatting(bothRange, new ConditionalFormattingRule[]{greenRule, redRule, greyRule});
+        scf.addConditionalFormatting(bothRange, new ConditionalFormattingRule[]{orangeRule, greenRule, redRule, greyRule});
     }
 
     private String colLetter(int colIdx) {
@@ -257,6 +281,9 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             if (first.compareTo(BigDecimal.ZERO) == 0) {
                 acc.firstEqZero++;
             } else {
+                if (logged.compareTo(BigDecimal.ZERO) == 0) {
+                    acc.zeroLoggedWithEstimate++;
+                }
                 if (logged.compareTo(first) <= 0) acc.loggedLeFirst++;
                 else acc.loggedGtFirst++;
             }
@@ -269,7 +296,7 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             out.add(new SummaryRow(
                     k.employee, k.sprintFirstId, k.sprintFirstName,
                     k.sprintLastLoggedId, k.sprintLastLoggedName,
-                    a.loggedLeFirst, a.loggedGtFirst, a.firstEqZero
+                    a.loggedLeFirst, a.loggedGtFirst, a.firstEqZero, a.zeroLoggedWithEstimate
             ));
         }
 
@@ -291,12 +318,19 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             acc.loggedLeFirst += sr.loggedLeFirstCount;
             acc.loggedGtFirst += sr.loggedGtFirstCount;
             acc.firstEqZero += sr.firstEqZeroCount;
+            acc.zeroLoggedWithEstimate += sr.zeroLoggedWithEstimateCount;
         }
 
         List<EmployeeTotalRow> out = new ArrayList<>(map.size());
         for (Map.Entry<String, SummaryAcc> e : map.entrySet()) {
             SummaryAcc a = e.getValue();
-            out.add(new EmployeeTotalRow(e.getKey(), a.loggedLeFirst, a.loggedGtFirst, a.firstEqZero));
+            out.add(new EmployeeTotalRow(
+                    e.getKey(),
+                    a.loggedLeFirst,
+                    a.loggedGtFirst,
+                    a.firstEqZero,
+                    a.zeroLoggedWithEstimate
+            ));
         }
 
         out.sort(Comparator.comparing(x -> x.employee, Comparator.nullsFirst(String::compareTo)));
@@ -330,6 +364,7 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
         int loggedLeFirst = 0;
         int loggedGtFirst = 0;
         int firstEqZero = 0;
+        int zeroLoggedWithEstimate = 0;
     }
 
     private static class SummaryRow {
@@ -344,11 +379,13 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
         final int loggedLeFirstCount;
         final int loggedGtFirstCount;
         final int firstEqZeroCount;
+        final int zeroLoggedWithEstimateCount;
 
         SummaryRow(String employee,
                    Long sprintFirstId, String sprintFirstName,
                    Long sprintLastLoggedId, String sprintLastLoggedName,
-                   int loggedLeFirstCount, int loggedGtFirstCount, int firstEqZeroCount) {
+                   int loggedLeFirstCount, int loggedGtFirstCount, int firstEqZeroCount,
+                   int zeroLoggedWithEstimateCount) {
             this.employee = employee;
             this.sprintFirstId = sprintFirstId;
             this.sprintFirstName = sprintFirstName;
@@ -357,6 +394,7 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             this.loggedLeFirstCount = loggedLeFirstCount;
             this.loggedGtFirstCount = loggedGtFirstCount;
             this.firstEqZeroCount = firstEqZeroCount;
+            this.zeroLoggedWithEstimateCount = zeroLoggedWithEstimateCount;
         }
     }
 
@@ -365,12 +403,14 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
         final int loggedLeFirstCount;
         final int loggedGtFirstCount;
         final int firstEqZeroCount;
+        final int zeroLoggedWithEstimateCount;
 
-        EmployeeTotalRow(String employee, int a, int b, int c) {
+        EmployeeTotalRow(String employee, int a, int b, int c, int d) {
             this.employee = employee;
             this.loggedLeFirstCount = a;
             this.loggedGtFirstCount = b;
             this.firstEqZeroCount = c;
+            this.zeroLoggedWithEstimateCount = d;
         }
     }
 
@@ -397,6 +437,19 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             return;
         }
         cell.setCellValue(v.doubleValue());
+    }
+
+    private void setPercentFromEstimate(Cell cell, BigDecimal estimate, BigDecimal logged) {
+        BigDecimal safeEstimate = nvl(estimate);
+        if (safeEstimate.compareTo(BigDecimal.ZERO) <= 0) {
+            cell.setBlank();
+            return;
+        }
+
+        BigDecimal percent = nvl(logged)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(safeEstimate, 2, RoundingMode.HALF_UP);
+        cell.setCellValue(percent.doubleValue());
     }
 
     private BigDecimal nvl(BigDecimal v) {
