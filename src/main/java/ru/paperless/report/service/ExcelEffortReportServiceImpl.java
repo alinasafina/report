@@ -50,96 +50,61 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
 
         try (Workbook wb = new XSSFWorkbook();
              ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            Font boldFont = wb.createFont();
+            boldFont.setBold(true);
+
+            CellStyle headerStyle = wb.createCellStyle();
+            headerStyle.setFont(boldFont);
 
             // ===================== Sheet 1: Summary =====================
             Sheet s1 = wb.createSheet("3.2 Соотвествия оценке по спринтам");
             int r1 = 0;
 
-            Row meta1 = s1.createRow(r1++);
-            meta1.createCell(0).setCellValue("ID спринта");
-            meta1.createCell(1).setCellValue(StringUtils.hasText(sprintIdsTextOriginal) ? sprintIdsTextOriginal.trim() : "ALL");
-
-            r1++;
-
             Row h1 = s1.createRow(r1++);
             h1.createCell(0).setCellValue("Сотрудник");
-
-            // sprint_first
-            h1.createCell(1).setCellValue("ID спринта (first)");
-            h1.createCell(2).setCellValue("Спринт (first)");
-
-            // sprint_last_logged (добавлено на 1-й лист)
-            h1.createCell(3).setCellValue("ID спринта (last logged)");
-            h1.createCell(4).setCellValue("Спринт (last logged)");
-
-            // counts
-            h1.createCell(5).setCellValue("Соответсвует оценке");
-            h1.createCell(6).setCellValue("Несоответсвует оценке");
-            h1.createCell(7).setCellValue("Без оценки разработки");
+            h1.createCell(1).setCellValue("Спринт (first)");
+            h1.createCell(2).setCellValue("Спринт (last logged)");
+            h1.createCell(3).setCellValue("Соответсвует оценке");
+            h1.createCell(4).setCellValue("Несоответсвует оценке");
+            h1.createCell(5).setCellValue("Без оценки разработки");
 
             for (SummaryRow sr : summaryRows) {
                 Row x = s1.createRow(r1++);
                 x.createCell(0).setCellValue(nullSafe(sr.employee));
-
-                x.createCell(1).setCellValue(sr.sprintFirstId == null ? "" : String.valueOf(sr.sprintFirstId));
-                x.createCell(2).setCellValue(nullSafe(sr.sprintFirstName));
-
-                x.createCell(3).setCellValue(sr.sprintLastLoggedId == null ? "" : String.valueOf(sr.sprintLastLoggedId));
-                x.createCell(4).setCellValue(nullSafe(sr.sprintLastLoggedName));
-
-                x.createCell(5).setCellValue(sr.loggedLeFirstCount);
-                x.createCell(6).setCellValue(sr.loggedGtFirstCount);
-                x.createCell(7).setCellValue(sr.firstEqZeroCount);
+                x.createCell(1).setCellValue(nullSafe(sr.sprintFirstName));
+                x.createCell(2).setCellValue(nullSafe(sr.sprintLastLoggedName));
+                x.createCell(3).setCellValue(sr.loggedLeFirstCount);
+                x.createCell(4).setCellValue(sr.loggedGtFirstCount);
+                x.createCell(5).setCellValue(sr.firstEqZeroCount);
             }
 
-            for (int i = 0; i <= 7; i++) s1.autoSizeColumn(i);
+            for (int i = 0; i <= 5; i++) s1.autoSizeColumn(i);
 
             // ===================== Sheet 2: Details =====================
             Sheet s2 = wb.createSheet("3.3 Соответсвия оценке по задачам");
             int r2 = 0;
 
-            Row meta2 = s2.createRow(r2++);
-            meta2.createCell(0).setCellValue("ID спринтов");
-            meta2.createCell(1).setCellValue(StringUtils.hasText(sprintIdsTextOriginal) ? sprintIdsTextOriginal.trim() : "ALL");
-
-            r2++;
-
             Row h2 = s2.createRow(r2++);
             h2.createCell(0).setCellValue("Сотрудник");
-
-            // sprint_first
-            h2.createCell(1).setCellValue("ID спринта (first)");
-            h2.createCell(2).setCellValue("Спринт (first)");
-
-            // sprint_last_logged (добавлено на 2-й лист)
-            h2.createCell(3).setCellValue("ID спринта (last logged)");
-            h2.createCell(4).setCellValue("Спринт (last logged)");
-
-            // issue + numbers
-            h2.createCell(5).setCellValue("Задача");
-            h2.createCell(6).setCellValue("Эпик");
-            h2.createCell(7).setCellValue("Оценка разработки");
-            h2.createCell(8).setCellValue("Списано часов");
+            h2.createCell(1).setCellValue("Спринт (first)");
+            h2.createCell(2).setCellValue("Спринт (last logged)");
+            h2.createCell(3).setCellValue("Задача");
+            h2.createCell(4).setCellValue("Эпик");
+            h2.createCell(5).setCellValue("Оценка разработки");
+            h2.createCell(6).setCellValue("Списано часов");
 
             int dataStartRow = r2;
-            int estCellIndex = 7;
-            int logCellIndex = 8;
+            int estCellIndex = 5;
+            int logCellIndex = 6;
 
             for (EffortReportRow row : detailRows) {
                 Row x = s2.createRow(r2++);
 
                 x.createCell(0).setCellValue(nullSafe(row.getEmployee()));
-
-                // sprint_first вместо sprint
-                x.createCell(1).setCellValue(row.getSprintFirstId() == null ? "" : String.valueOf(row.getSprintFirstId()));
-                x.createCell(2).setCellValue(nullSafe(row.getSprintFirstName()));
-
-                // sprint_last_logged
-                x.createCell(3).setCellValue(row.getSprintLastLoggedId() == null ? "" : String.valueOf(row.getSprintLastLoggedId()));
-                x.createCell(4).setCellValue(nullSafe(row.getSprintLastLoggedName()));
-
-                x.createCell(5).setCellValue(nullSafe(row.getIssueKey()));
-                x.createCell(6).setCellValue(nullSafe(row.getEpicKey()));
+                x.createCell(1).setCellValue(nullSafe(row.getSprintFirstName()));
+                x.createCell(2).setCellValue(nullSafe(row.getSprintLastLoggedName()));
+                x.createCell(3).setCellValue(nullSafe(row.getIssueKey()));
+                x.createCell(4).setCellValue(nullSafe(row.getEpicKey()));
 
                 Cell estCell = x.createCell(estCellIndex);
                 setNumeric(estCell, row.getFirstEstimateHours());
@@ -152,7 +117,7 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             if (!detailRows.isEmpty()) {
                 applyConditionalFormattingForDetails(s2, dataStartRow, dataEndRow, estCellIndex, logCellIndex);
             }
-            for (int i = 0; i <= 7; i++) s2.autoSizeColumn(i);
+            for (int i = 0; i <= 6; i++) s2.autoSizeColumn(i);
 
             // ===================== Sheet 3: Info =====================
             Sheet s3 = wb.createSheet("3.1 Соответсвие оценке по сотрудникам");
@@ -163,21 +128,24 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             t1.createCell(4).setCellValue("Общее по спринтам");
 
             Row hs = s3.createRow(r3++);
-            hs.createCell(0).setCellValue("ID спринта (first)");
-            hs.createCell(1).setCellValue("Спринт (first)");
+            hs.createCell(0).setCellValue("Спринт (first)");
 
             hs.createCell(4).setCellValue("Сотрудник");
             hs.createCell(5).setCellValue("Соответсвует оценке");
             hs.createCell(6).setCellValue("Несоответсвует оценке");
             hs.createCell(7).setCellValue("Без оценки разработки");
+            for (int i = 0; i <= 7; i++) {
+                if (hs.getCell(i) != null) {
+                    hs.getCell(i).setCellStyle(headerStyle);
+                }
+            }
 
             int startDataRow = r3;
 
             int rr = startDataRow;
             for (SprintRow s : usedSprints) {
                 Row row = getOrCreateRow(s3, rr++);
-                row.createCell(0).setCellValue(s.sprintId == null ? "" : String.valueOf(s.sprintId));
-                row.createCell(1).setCellValue(nullSafe(s.sprintName));
+                row.createCell(0).setCellValue(nullSafe(s.sprintName));
             }
 
             rr = startDataRow;
@@ -190,6 +158,11 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             }
 
             for (int i = 0; i <= 7; i++) s3.autoSizeColumn(i);
+            s3.setAutoFilter(new CellRangeAddress(hs.getRowNum(), hs.getRowNum(), 4, 7));
+
+            wb.setSheetOrder("3.1 Соответсвие оценке по сотрудникам", 0);
+            wb.setSheetOrder("3.2 Соотвествия оценке по спринтам", 1);
+            wb.setSheetOrder("3.3 Соответсвия оценке по задачам", 2);
 
             wb.write(baos);
             return baos.toByteArray();
