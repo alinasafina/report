@@ -125,7 +125,7 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             int r = 0;
 
             Row m1 = s1.createRow(r++);
-            m1.createCell(0).setCellValue("Done статусы");
+            m1.createCell(0).setCellValue("Разработка завершена");
             m1.createCell(1).setCellValue(
                     f.doneStatusNamesOriginal().isEmpty()
                             ? "EMPTY"
@@ -133,7 +133,7 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             );
 
             Row m2 = s1.createRow(r++);
-            m2.createCell(0).setCellValue("Не готово");
+            m2.createCell(0).setCellValue("Разработка не завершена");
             m2.createCell(1).setCellValue(
                     f.notClosedStatusNamesOriginal().isEmpty()
                             ? "EMPTY"
