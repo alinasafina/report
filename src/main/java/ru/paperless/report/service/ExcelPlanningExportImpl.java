@@ -161,6 +161,9 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
 
             s1.setAutoFilter(new CellRangeAddress(h.getRowNum(), h.getRowNum(), 0, 7));
             for (int i = 0; i < 8; i++) s1.autoSizeColumn(i);
+            s1.setColumnWidth(1, 25 * 256);
+            s1.setColumnWidth(2, 30 * 256);
+            s1.setColumnWidth(4, 60 * 256);
 
             Sheet s2 = wb.createSheet("1.1 План-факт кол-во задач");
             int d = 0;
@@ -170,8 +173,8 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             sh.createCell(1).setCellValue("ID спринта");
             sh.createCell(2).setCellValue("Спринт");
             sh.createCell(3).setCellValue("Количество задач запланировано");
-            sh.createCell(4).setCellValue("Количество done-задач");
-            sh.createCell(5).setCellValue("Количество не готовых задач из плана");
+            sh.createCell(4).setCellValue("Разработка завершена (из плана)");
+            sh.createCell(5).setCellValue("Разработка не завершена (из плана)");
             sh.createCell(6).setCellValue("Вне плана");
 
             for (TempoPlannedSummaryRow row : summary) {
