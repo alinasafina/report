@@ -2,6 +2,7 @@ package ru.paperless.report.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.Font;
@@ -158,6 +159,7 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                 }
             }
 
+            s1.setAutoFilter(new CellRangeAddress(h.getRowNum(), h.getRowNum(), 0, 7));
             for (int i = 0; i < 8; i++) s1.autoSizeColumn(i);
 
             Sheet s2 = wb.createSheet("1.1 План-факт кол-во задач");
@@ -169,7 +171,7 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             sh.createCell(2).setCellValue("Спринт");
             sh.createCell(3).setCellValue("Количество задач запланировано");
             sh.createCell(4).setCellValue("Количество done-задач");
-            sh.createCell(5).setCellValue("Количество не закрытых задач");
+            sh.createCell(5).setCellValue("Количество не готовых задач из плана");
             sh.createCell(6).setCellValue("Вне плана");
 
             for (TempoPlannedSummaryRow row : summary) {
@@ -183,6 +185,7 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                 x.createCell(6).setCellValue(row.getOutOfPlanTasksCount() == null ? 0 : row.getOutOfPlanTasksCount());
             }
 
+            s2.setAutoFilter(new CellRangeAddress(sh.getRowNum(), sh.getRowNum(), 0, 6));
             for (int i = 0; i < 7; i++) s2.autoSizeColumn(i);
 
             wb.write(baos);
