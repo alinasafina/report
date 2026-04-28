@@ -36,7 +36,7 @@ logging:
 jira:
   base-url: 
   pat: 
-  project-key: PREQ
+  project-key: FDOCDEV
   sprintFieldId: customfield_12950
   tempo-planned:
     excluded-summary-phrases: дежурство;передача версии

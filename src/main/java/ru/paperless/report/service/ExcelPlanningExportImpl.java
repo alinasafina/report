@@ -104,9 +104,10 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             h.createCell(1).setCellValue("Спринт");
             h.createCell(2).setCellValue("Сотрудник");
             h.createCell(3).setCellValue("Номер задачи");
-            h.createCell(4).setCellValue("Запланировано, ч");
-            h.createCell(5).setCellValue("Статус на начало");
-            h.createCell(6).setCellValue("Статус на конец");
+            h.createCell(4).setCellValue("Название задачи");
+            h.createCell(5).setCellValue("Запланировано, ч");
+            h.createCell(6).setCellValue("Статус на начало");
+            h.createCell(7).setCellValue("Статус на конец");
 
             for (TempoPlannedDetailRow row : details) {
                 Row x = s1.createRow(r++);
@@ -114,12 +115,13 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                 x.createCell(1).setCellValue(nullSafe(row.getSprintName()));
                 x.createCell(2).setCellValue(nullSafe(row.getEmployee()));
                 x.createCell(3).setCellValue(nullSafe(row.getIssueKey()));
-                x.createCell(4).setCellValue(row.getPlannedSeconds() == null ? 0 : row.getPlannedSeconds());
-                x.createCell(5).setCellValue(nullSafe(row.getStatusAtSprintStart()));
-                x.createCell(6).s
+                x.createCell(4).setCellValue(nullSafe(row.getIssueSummary()));
+                x.createCell(5).setCellValue(row.getPlannedSeconds() == null ? 0 : row.getPlannedSeconds());
+                x.createCell(6).setCellValue(nullSafe(row.getStatusAtSprintStart()));
+                x.createCell(7).setCellValue(nullSafe(row.getStatusAtSprintEnd()));
             }
 
-            for (int i = 0; i < 7; i++) s1.autoSizeColumn(i);
+            for (int i = 0; i < 8; i++) s1.autoSizeColumn(i);
 
             // ---------- Sheet 2: Summary ----------
             Sheet s2 = wb.createSheet("1.1 План-факт кол-во задач");

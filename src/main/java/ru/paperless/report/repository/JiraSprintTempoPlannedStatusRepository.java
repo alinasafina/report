@@ -17,6 +17,7 @@ public interface JiraSprintTempoPlannedStatusRepository extends JpaRepository<Ji
                     t.sprintName,
                     t.employee,
                     t.issueKey,
+                    t.issueSummary,
                     sum(coalesce(t.plannedSeconds, 0)),
                     min(t.statusAtSprintStart),
                     min(t.statusAtSprintEnd)
@@ -24,7 +25,7 @@ public interface JiraSprintTempoPlannedStatusRepository extends JpaRepository<Ji
                 from JiraSprintTempoPlannedStatus t
                 where (:useEmployees = false or t.employee in :employees)
                   and (:useSprints = false or t.sprintId in :sprintIds)
-                group by t.sprintId, t.sprintName, t.employee, t.issueKey
+                group by t.sprintId, t.sprintName, t.employee, t.issueKey, t.issueSummary
                 order by t.sprintId, t.employee, t.issueKey
             """)
     List<TempoPlannedDetailRow> getDetails(

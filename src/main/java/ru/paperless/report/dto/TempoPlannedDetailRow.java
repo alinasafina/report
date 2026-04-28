@@ -10,6 +10,7 @@ public class TempoPlannedDetailRow {
     private String sprintName;
     private String employee;
     private String issueKey;
+    private String issueSummary;
     private Long plannedSeconds;
     private String statusAtSprintStart;
     private String statusAtSprintEnd;

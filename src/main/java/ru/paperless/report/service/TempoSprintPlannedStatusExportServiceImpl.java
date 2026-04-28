@@ -48,9 +48,9 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
 
     /**
      * Рекорд “сырых” данных из Tempo allocation:
-     * сотрудник / задача / дата планирования / секунды / assigneeKey (jira user key)
+     * сотрудник / задача / название задачи / дата планирования / секунды / assigneeKey (jira user key)
      */
-    private record PlannedRec(String employee, String assigneeKey, String issueKey, LocalDate plannedDate,
+    private record PlannedRec(String employee, String assigneeKey, String issueKey, String issueSummary, LocalDate plannedDate,
                               long plannedSeconds) {
     }
 
@@ -164,11 +164,13 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
             }
             Map<K, Long> aggregated = new HashMap<>();
             Map<K, String> employeeName = new HashMap<>();
+            Map<K, String> issueSummary = new HashMap<>();
 
             for (PlannedRec r : inSprint) {
                 K k = new K(r.assigneeKey(), r.issueKey());
                 aggregated.merge(k, r.plannedSeconds(), Long::sum);
                 employeeName.putIfAbsent(k, r.employee());
+                issueSummary.putIfAbsent(k, r.issueSummary());
             }
 
             for (Map.Entry<K, Long> e : aggregated.entrySet()) {
@@ -198,6 +200,7 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
                         .sprintId(sp.id())
                         .sprintName(sp.name())
                         .issueKey(issueKey)
+                        .issueSummary(issueSummary.get(k))
                         .employee(employeeName.getOrDefault(k, ""))
                         .assigneeKey(k.assigneeKey())
                         .plannedSeconds(plannedSeconds/ 3600)
@@ -258,6 +261,7 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
                 emp.getFullName(),
                 assigneeKey,
                 issueKey,
+                a.getPlanItem().getSummary(),
                 plannedDate,
                 seconds
         );
