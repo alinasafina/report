@@ -41,6 +41,8 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
     private String projectKey;
     @org.springframework.beans.factory.annotation.Value("${jira.sprintFieldId}")
     private String sprintFieldId;
+    @org.springframework.beans.factory.annotation.Value("#{'${jira.tempo-planned.excluded-summary-phrases:дежурство;передача версии}'.split(';')}")
+    private List<String> excludedSummaryPhrasesConfig;
 
     private static final DateTimeFormatter ISO_DATE = DateTimeFormatter.ISO_LOCAL_DATE;
 
@@ -65,6 +67,8 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
         if (to.isBefore(from)) {
             throw new IllegalArgumentException("to < from");
         }
+
+        List<String> excludedSummaryPhrases = normalizeExcludedSummaryPhrases();
 
         // 1) selectable employees with jiraUserKey
         List<Employee> employees = employeeRepo.findBySelectableTrue();
@@ -104,8 +108,7 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
         // 3) build raw planned records (employee/issue/date/seconds)
         List<PlannedRec> planned = allocations.stream()
                 .filter(a -> a.getPlanItem().getKey().toUpperCase().contains(projectKey) )
-                .filter(a -> !a.getPlanItem().getSummary().toLowerCase().contains("дежурство"))
-                .filter(a -> !a.getPlanItem().getSummary().toLowerCase().contains("передача версии"))
+                .filter(a -> !containsExcludedSummaryPhrase(a, excludedSummaryPhrases))
                 .map(a -> toPlannedRec(a, byAssigneeKey))
                 .filter(Objects::nonNull)
                 .toList();
@@ -258,6 +261,33 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
                 plannedDate,
                 seconds
         );
+    }
+
+    private List<String> normalizeExcludedSummaryPhrases() {
+        return Optional.ofNullable(excludedSummaryPhrasesConfig)
+                .orElse(List.of())
+                .stream()
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .map(String::toLowerCase)
+                .distinct()
+                .toList();
+    }
+
+    private boolean containsExcludedSummaryPhrase(TempoAllocationDto allocation, List<String> excludedSummaryPhrases) {
+        String summary = Optional.ofNullable(allocation)
+                .map(TempoAllocationDto::getPlanItem)
+                .map(TempoAllocationDto.PlanItem::getSummary)
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .map(String::toLowerCase)
+                .orElse("");
+
+        if (!StringUtils.hasText(summary)) {
+            return false;
+        }
+
+        return excludedSummaryPhrases.stream().anyMatch(summary::contains);
     }
 
     /**
