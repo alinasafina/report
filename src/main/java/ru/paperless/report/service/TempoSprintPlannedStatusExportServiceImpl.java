@@ -46,9 +46,7 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
 
     /**
      * Рекорд “сырых” данных из Tempo allocation:
-     * сотрудник / задача / дата планирования / секунды / assigneeKey из Tempo.
-     * Для выгрузки planned-отчёта именно Tempo allocation является источником истины
-     * по тому, на кого была запланирована задача, независимо от assignee/developer в Jira issue.
+     * сотрудник / задача / дата планирования / секунды / assigneeKey (jira user key)
      */
     private record PlannedRec(String employee, String assigneeKey, String issueKey, LocalDate plannedDate,
                               long plannedSeconds) {
@@ -158,7 +156,7 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
 
             if (inSprint.isEmpty()) continue;
 
-            // Aggregate planned seconds by Tempo assignee + issue within the sprint.
+            // Aggregate planned seconds by (assigneeKey + issueKey) within the sprint
             record K(String assigneeKey, String issueKey) {
             }
             Map<K, Long> aggregated = new HashMap<>();
@@ -187,10 +185,6 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
                 });
 
                 if (full == null) continue;
-
-                boolean sprintExistsInTask = generalMethodsService.extractSprintsDetailed(full.getFields())
-                        .stream().noneMatch(s-> Objects.equals(s.id(), sp.id()));
-                if(sprintExistsInTask) continue;
 
                 // status at sprint start/end
                 String stStart = resolveStatusAtStart(full, sp.startDate());
@@ -227,13 +221,18 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
         if (a.getAssignee() == null) return null;
         if (a.getPlanItem() == null || !StringUtils.hasText(a.getPlanItem().getKey())) return null;
 
-        String assigneeKey = extractTempoAssigneeKey(a);
+        String assigneeKey = null;
+
+        // В allocation ответе assignee = объект, где есть userKey
+        if (a.getAssignee() != null && StringUtils.hasText(a.getAssignee().getKey())) {
+            assigneeKey = a.getAssignee().getKey().trim();
+        }
 
         if (!StringUtils.hasText(assigneeKey)) return null;
 
         Employee emp = byAssigneeKey.get(assigneeKey);
         if (emp == null) {
-            // планирование есть, но сотрудник не участвует в выгрузке
+            // не selectable / нет в таблице
             return null;
         }
 
@@ -259,22 +258,6 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
                 plannedDate,
                 seconds
         );
-    }
-
-    private String extractTempoAssigneeKey(TempoAllocationDto allocation) {
-        if (allocation == null || allocation.getAssignee() == null) {
-            return null;
-        }
-
-        if (StringUtils.hasText(allocation.getAssignee().getUserKey())) {
-            return allocation.getAssignee().getUserKey().trim();
-        }
-
-        if (StringUtils.hasText(allocation.getAssignee().getKey())) {
-            return allocation.getAssignee().getKey().trim();
-        }
-
-        return null;
     }
 
     /**
