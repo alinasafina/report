@@ -5,7 +5,7 @@ import ru.paperless.report.entity.ProjectJiraStatus;
 import java.util.List;
 
 public interface DataService {
-    String getSprintsIdFromDB();
+    String getSprintsIdFromDB(String namePrefix);
 
     List<ProjectJiraStatus> getProjectJiraStatus();
 

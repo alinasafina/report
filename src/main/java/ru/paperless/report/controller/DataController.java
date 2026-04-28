@@ -17,8 +17,8 @@ public class DataController {
     private final DataService service;
     @GetMapping(value = "sprints/id", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(description = "Выгрузить список айди спринтов из БД")
-    public String getSprints() {
-        return service.getSprintsIdFromDB();
+    public String getSprints(@RequestParam(name = "namePrefix", required = false) String namePrefix) {
+        return service.getSprintsIdFromDB(namePrefix);
     }
 
     @GetMapping(value = "status", produces = MediaType.APPLICATION_JSON_VALUE)

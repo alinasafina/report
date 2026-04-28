@@ -2,6 +2,7 @@ package ru.paperless.report.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import ru.paperless.report.entity.Employee;
 import ru.paperless.report.entity.ProjectJiraSprint;
 import ru.paperless.report.entity.ProjectJiraStatus;
@@ -20,8 +21,19 @@ public class DataServiceImpl implements DataService {
     private final EmployeeRepository employeeRepository;
 
     @Override
-    public String getSprintsIdFromDB() {
+    public String getSprintsIdFromDB(String namePrefix) {
+        String normalizedPrefix = StringUtils.hasText(namePrefix) ? namePrefix.trim().toLowerCase() : null;
+
         return projectJiraSprintRepository.findAll().stream()
+                .filter(sprint -> {
+                    if (!StringUtils.hasText(normalizedPrefix)) {
+                        return true;
+                    }
+
+                    String sprintName = sprint.getSprintName();
+                    return StringUtils.hasText(sprintName)
+                            && sprintName.trim().toLowerCase().startsWith(normalizedPrefix);
+                })
                 .map(ProjectJiraSprint::getSprintId)
                 .map(String::valueOf)
                 .collect(Collectors.joining(" "));
