@@ -72,15 +72,15 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             outOfPlanStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
             outOfPlanStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
-            Font doneFont = wb.createFont();
-            doneFont.setColor(IndexedColors.GREEN.getIndex());
+            Font notDoneFont = wb.createFont();
+            notDoneFont.setColor(IndexedColors.BROWN.getIndex());
 
-            CellStyle doneStyle = wb.createCellStyle();
-            doneStyle.setFont(doneFont);
+            CellStyle notDoneStyle = wb.createCellStyle();
+            notDoneStyle.setFont(notDoneFont);
 
-            CellStyle outOfPlanDoneStyle = wb.createCellStyle();
-            outOfPlanDoneStyle.cloneStyleFrom(outOfPlanStyle);
-            outOfPlanDoneStyle.setFont(doneFont);
+            CellStyle outOfPlanNotDoneStyle = wb.createCellStyle();
+            outOfPlanNotDoneStyle.cloneStyleFrom(outOfPlanStyle);
+            outOfPlanNotDoneStyle.setFont(notDoneFont);
 
             Sheet s1 = wb.createSheet("1.2 План-факт задачи");
             int r = 0;
@@ -143,17 +143,17 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                 boolean isDone = StringUtils.hasText(row.getStatusAtSprintEnd())
                         && doneStatuses.contains(row.getStatusAtSprintEnd());
 
-                if (Boolean.TRUE.equals(row.getOutOfPlan()) && isDone) {
+                if (Boolean.TRUE.equals(row.getOutOfPlan()) && !isDone) {
                     for (int i = 0; i < 8; i++) {
-                        x.getCell(i).setCellStyle(outOfPlanDoneStyle);
+                        x.getCell(i).setCellStyle(outOfPlanNotDoneStyle);
                     }
                 } else if (Boolean.TRUE.equals(row.getOutOfPlan())) {
                     for (int i = 0; i < 8; i++) {
                         x.getCell(i).setCellStyle(outOfPlanStyle);
                     }
-                } else if (isDone) {
+                } else if (!isDone) {
                     for (int i = 0; i < 8; i++) {
-                        x.getCell(i).setCellStyle(doneStyle);
+                        x.getCell(i).setCellStyle(notDoneStyle);
                     }
                 }
             }
