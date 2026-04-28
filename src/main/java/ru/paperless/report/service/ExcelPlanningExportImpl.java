@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -65,10 +66,21 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
 
         try (Workbook wb = new XSSFWorkbook();
              ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            Set<String> doneStatuses = new HashSet<>(f.doneStatusNamesOriginal());
 
             CellStyle outOfPlanStyle = wb.createCellStyle();
             outOfPlanStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
             outOfPlanStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+            Font doneFont = wb.createFont();
+            doneFont.setColor(IndexedColors.GREEN.getIndex());
+
+            CellStyle doneStyle = wb.createCellStyle();
+            doneStyle.setFont(doneFont);
+
+            CellStyle outOfPlanDoneStyle = wb.createCellStyle();
+            outOfPlanDoneStyle.cloneStyleFrom(outOfPlanStyle);
+            outOfPlanDoneStyle.setFont(doneFont);
 
             Sheet s1 = wb.createSheet("1.2 План-факт задачи");
             int r = 0;
@@ -128,9 +140,20 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                 x.createCell(6).setCellValue(nullSafe(row.getStatusAtSprintStart()));
                 x.createCell(7).setCellValue(nullSafe(row.getStatusAtSprintEnd()));
 
-                if (Boolean.TRUE.equals(row.getOutOfPlan())) {
+                boolean isDone = StringUtils.hasText(row.getStatusAtSprintEnd())
+                        && doneStatuses.contains(row.getStatusAtSprintEnd());
+
+                if (Boolean.TRUE.equals(row.getOutOfPlan()) && isDone) {
+                    for (int i = 0; i < 8; i++) {
+                        x.getCell(i).setCellStyle(outOfPlanDoneStyle);
+                    }
+                } else if (Boolean.TRUE.equals(row.getOutOfPlan())) {
                     for (int i = 0; i < 8; i++) {
                         x.getCell(i).setCellStyle(outOfPlanStyle);
+                    }
+                } else if (isDone) {
+                    for (int i = 0; i < 8; i++) {
+                        x.getCell(i).setCellStyle(doneStyle);
                     }
                 }
             }
