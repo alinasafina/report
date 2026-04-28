@@ -27,7 +27,7 @@ public interface GeneralMethodsService {
     @SuppressWarnings("unchecked")
     String extractAssigneeDisplayName(Map<String, Object> fields);
 
-    String extractDescriptionValue(Map<String, Object> fields);
+    String extractSummaryValue(Map<String, Object> fields);
 
     Long parseLongSafe(String s);
 

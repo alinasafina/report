@@ -64,7 +64,7 @@ public class JiraStatusTransitionExportServiceImpl implements JiraStatusTransiti
         while (startAt < total) {
             JiraSearchRequest searchReq = JiraSearchRequest.builder()
                     .jql(jql)
-                    .fields(List.of("key", "assignee", "description", developerFieldId))
+                    .fields(List.of("key", "assignee", "summary", developerFieldId))
                     .startAt(startAt)
                     .maxResults(pageSize)
                     .build();
@@ -90,14 +90,14 @@ public class JiraStatusTransitionExportServiceImpl implements JiraStatusTransiti
 
                 // тяжёлый запрос с changelog
                 // fields: assignee,sprintField,developerField — чтобы получить спринты+dev в issue (для записи)
-                String fieldsParam = String.join(",", "assignee", "description", sprintFieldId, developerFieldId);
+                String fieldsParam = String.join(",", "assignee", "summary", sprintFieldId, developerFieldId);
                 JiraIssueResponse full = getIssue(jiraClient, key, fieldsParam);
 
                 List<SprintInfo> sprints = generalMethodsService.extractSprintsDetailed(full.getFields());
 
                 String fullAssignee = generalMethodsService.extractAssigneeDisplayName(full.getFields());
                 String fullDeveloper = generalMethodsService.extractDeveloperValue(full.getFields());
-                String issueSummary = generalMethodsService.extractDescriptionValue(full.getFields());
+                String issueSummary = generalMethodsService.extractSummaryValue(full.getFields());
 
                 if (!allowByPeopleFilter(fullAssignee, fullDeveloper, developerFilter)) {
                     continue;

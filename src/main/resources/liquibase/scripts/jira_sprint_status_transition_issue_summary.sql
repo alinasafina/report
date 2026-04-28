@@ -3,5 +3,5 @@ ALTER TABLE public.jira_sprint_status_transition
 /
 
 COMMENT ON COLUMN public.jira_sprint_status_transition.issue_summary
-    IS 'Описание задачи из Jira field description';
+    IS 'Название задачи из Jira field summary';
 /
