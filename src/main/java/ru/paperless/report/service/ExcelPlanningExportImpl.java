@@ -195,9 +195,10 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
 
     private List<TempoPlannedDetailRow> mergeWithOutOfPlanTasks(List<TempoPlannedDetailRow> plannedDetails, Filter f) {
         List<TempoPlannedDetailRow> result = new ArrayList<>(plannedDetails);
-        Set<String> plannedKeys = plannedDetails.stream()
-                .map(this::toDetailKey)
+        Set<String> plannedIssueKeys = plannedDetails.stream()
+                .map(this::toSprintIssueKey)
                 .collect(Collectors.toCollection(HashSet::new));
+        Set<String> addedOutOfPlanKeys = new HashSet<>();
 
         List<OutOfPlanTaskProjection> transitionTasks = transitionRepo.getLatestTasksForPlanning(
                 f.employees(),
@@ -218,7 +219,8 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                     true
             );
 
-            if (plannedKeys.add(toDetailKey(row))) {
+            String sprintIssueKey = toSprintIssueKey(row);
+            if (!plannedIssueKeys.contains(sprintIssueKey) && addedOutOfPlanKeys.add(toDetailKey(row))) {
                 result.add(row);
             }
         }
@@ -336,6 +338,12 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
     private String toDetailKey(TempoPlannedDetailRow row) {
         return String.join("|",
                 nullSafe(row.getEmployee()),
+                row.getSprintId() == null ? "" : String.valueOf(row.getSprintId()),
+                nullSafe(row.getIssueKey()));
+    }
+
+    private String toSprintIssueKey(TempoPlannedDetailRow row) {
+        return String.join("|",
                 row.getSprintId() == null ? "" : String.valueOf(row.getSprintId()),
                 nullSafe(row.getIssueKey()));
     }
