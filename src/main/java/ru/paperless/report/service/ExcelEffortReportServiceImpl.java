@@ -441,12 +441,18 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
 
     private void setPercentFromEstimate(Cell cell, BigDecimal estimate, BigDecimal logged) {
         BigDecimal safeEstimate = nvl(estimate);
+        BigDecimal safeLogged = nvl(logged);
+        if (safeEstimate.compareTo(BigDecimal.ZERO) == 0 && safeLogged.compareTo(BigDecimal.ZERO) == 0) {
+            cell.setCellValue(0);
+            return;
+        }
+
         if (safeEstimate.compareTo(BigDecimal.ZERO) <= 0) {
             cell.setBlank();
             return;
         }
 
-        BigDecimal percent = nvl(logged)
+        BigDecimal percent = safeLogged
                 .multiply(BigDecimal.valueOf(100))
                 .divide(safeEstimate, 2, RoundingMode.HALF_UP);
         cell.setCellValue(percent.doubleValue());
