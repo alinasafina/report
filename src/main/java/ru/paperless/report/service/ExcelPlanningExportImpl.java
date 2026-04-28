@@ -209,9 +209,8 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
 
             s1.setAutoFilter(new CellRangeAddress(h.getRowNum(), h.getRowNum(), 0, 6));
             for (int i = 0; i < 7; i++) s1.autoSizeColumn(i);
-            s1.setColumnWidth(1, 25 * 256);
-            s1.setColumnWidth(2, 30 * 256);
-            s1.setColumnWidth(4, 60 * 256);
+            s1.setColumnWidth(1, 35 * 256);
+            s1.setColumnWidth(3, 65 * 256);
 
             Sheet s2 = wb.createSheet("1.1 План-факт кол-во задач");
             int d = 0;
