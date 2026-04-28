@@ -100,12 +100,17 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
                 t.sprint_name as sprint_name,
                 t.final_assignee as employee,
                 t.issue_key as issue_key,
+                t.from_status_name as status_at_sprint_start,
                 t.to_status_name as status_at_sprint_end,
                 t.transition_date as transition_date,
                 row_number() over (
                     partition by t.sprint_id, t.final_assignee, t.issue_key
+                    order by t.transition_date asc nulls last, t.id asc
+                ) as start_rn,
+                row_number() over (
+                    partition by t.sprint_id, t.final_assignee, t.issue_key
                     order by t.transition_date desc nulls last, t.id desc
-                ) as rn
+                ) as end_rn
             from jira_sprint_status_transition t
             where t.final_assignee is not null
               and t.final_assignee in (:employees)
@@ -119,29 +124,59 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
                 t.sprint_name as sprint_name,
                 t.developer as employee,
                 t.issue_key as issue_key,
+                t.from_status_name as status_at_sprint_start,
                 t.to_status_name as status_at_sprint_end,
                 t.transition_date as transition_date,
                 row_number() over (
                     partition by t.sprint_id, t.developer, t.issue_key
+                    order by t.transition_date asc nulls last, t.id asc
+                ) as start_rn,
+                row_number() over (
+                    partition by t.sprint_id, t.developer, t.issue_key
                     order by t.transition_date desc nulls last, t.id desc
-                ) as rn
+                ) as end_rn
             from jira_sprint_status_transition t
             where t.developer is not null
               and t.developer in (:employees)
               and t.issue_key is not null
               and (:useSprints = false or t.sprint_id in (:sprintIds))
               and (t.final_assignee is null or t.developer <> t.final_assignee)
+        ),
+        first_transitions as (
+            select
+                sprint_id,
+                sprint_name,
+                employee,
+                issue_key,
+                status_at_sprint_start
+            from matched
+            where start_rn = 1
+        ),
+        last_transitions as (
+            select
+                sprint_id,
+                sprint_name,
+                employee,
+                issue_key,
+                status_at_sprint_end,
+                transition_date
+            from matched
+            where end_rn = 1
         )
         select
-            sprint_id as sprintId,
-            sprint_name as sprintName,
-            employee as employee,
-            issue_key as issueKey,
-            status_at_sprint_end as statusAtSprintEnd,
-            transition_date as transitionDate
-        from matched
-        where rn = 1
-        order by sprint_id nulls last, employee, issue_key
+            l.sprint_id as sprintId,
+            l.sprint_name as sprintName,
+            l.employee as employee,
+            l.issue_key as issueKey,
+            f.status_at_sprint_start as statusAtSprintStart,
+            l.status_at_sprint_end as statusAtSprintEnd,
+            l.transition_date as transitionDate
+        from last_transitions l
+        left join first_transitions f
+            on f.sprint_id = l.sprint_id
+           and f.employee = l.employee
+           and f.issue_key = l.issue_key
+        order by l.sprint_id nulls last, l.employee, l.issue_key
         """, nativeQuery = true)
     List<OutOfPlanTaskProjection> getLatestTasksForPlanning(
             @Param("employees") List<String> employees,

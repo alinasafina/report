@@ -190,7 +190,7 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                     task.getIssueKey(),
                     null,
                     null,
-                    null,
+                    task.getStatusAtSprintStart(),
                     task.getStatusAtSprintEnd(),
                     true
             );
