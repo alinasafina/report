@@ -160,9 +160,9 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             for (int i = 0; i <= 7; i++) s3.autoSizeColumn(i);
             s3.setAutoFilter(new CellRangeAddress(hs.getRowNum(), hs.getRowNum(), 4, 7));
 
-            wb.setSheetOrder("3.1 Соответсвие оценке по сотрудникам", 0);
-            wb.setSheetOrder("3.2 Соотвествия оценке по спринтам", 1);
-            wb.setSheetOrder("3.3 Соответсвия оценке по задачам", 2);
+            wb.setSheetOrder(s3.getSheetName(), 0);
+            wb.setSheetOrder(s1.getSheetName(), 1);
+            wb.setSheetOrder(s2.getSheetName(), 2);
 
             wb.write(baos);
             return baos.toByteArray();
