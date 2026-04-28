@@ -7,6 +7,7 @@ public interface OutOfPlanTaskProjection {
     String getSprintName();
     String getEmployee();
     String getIssueKey();
+    String getIssueSummary();
     String getStatusAtSprintStart();
     String getStatusAtSprintEnd();
     OffsetDateTime getTransitionDate();

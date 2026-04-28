@@ -188,7 +188,7 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                     task.getSprintName(),
                     task.getEmployee(),
                     task.getIssueKey(),
-                    null,
+                    task.getIssueSummary(),
                     null,
                     task.getStatusAtSprintStart(),
                     task.getStatusAtSprintEnd(),

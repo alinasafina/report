@@ -140,6 +140,57 @@ public class GeneralMethodsServiceImpl implements GeneralMethodsService {
     }
 
     @Override
+    public String extractDescriptionValue(Map<String, Object> fields) {
+        if (fields == null) return null;
+        Object description = fields.get("description");
+        if (description == null) return null;
+
+        if (description instanceof String s) {
+            return StringUtils.hasText(s) ? s.trim() : null;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        appendDescriptionText(description, sb);
+        String result = sb.toString().trim();
+        return StringUtils.hasText(result) ? result : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void appendDescriptionText(Object node, StringBuilder sb) {
+        if (node == null) return;
+
+        if (node instanceof String s) {
+            if (StringUtils.hasText(s)) {
+                if (!sb.isEmpty()) sb.append(' ');
+                sb.append(s.trim());
+            }
+            return;
+        }
+
+        if (node instanceof Map<?, ?> map) {
+            Object text = map.get("text");
+            if (text instanceof String s && StringUtils.hasText(s)) {
+                if (!sb.isEmpty()) sb.append(' ');
+                sb.append(s.trim());
+            }
+
+            Object content = map.get("content");
+            if (content instanceof List<?> list) {
+                for (Object item : list) {
+                    appendDescriptionText(item, sb);
+                }
+            }
+            return;
+        }
+
+        if (node instanceof List<?> list) {
+            for (Object item : list) {
+                appendDescriptionText(item, sb);
+            }
+        }
+    }
+
+    @Override
     public Long parseLongSafe(String s) {
         try {
             if (!StringUtils.hasText(s)) return null;

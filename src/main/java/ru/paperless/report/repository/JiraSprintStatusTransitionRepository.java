@@ -100,6 +100,7 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
                 t.sprint_name as sprint_name,
                 t.final_assignee as employee,
                 t.issue_key as issue_key,
+                t.issue_summary as issue_summary,
                 t.from_status_name as status_at_sprint_start,
                 t.to_status_name as status_at_sprint_end,
                 t.transition_date as transition_date,
@@ -124,6 +125,7 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
                 t.sprint_name as sprint_name,
                 t.developer as employee,
                 t.issue_key as issue_key,
+                t.issue_summary as issue_summary,
                 t.from_status_name as status_at_sprint_start,
                 t.to_status_name as status_at_sprint_end,
                 t.transition_date as transition_date,
@@ -148,6 +150,7 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
                 sprint_name,
                 employee,
                 issue_key,
+                issue_summary,
                 status_at_sprint_start
             from matched
             where start_rn = 1
@@ -158,6 +161,7 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
                 sprint_name,
                 employee,
                 issue_key,
+                issue_summary,
                 status_at_sprint_end,
                 transition_date
             from matched
@@ -168,6 +172,7 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
             l.sprint_name as sprintName,
             l.employee as employee,
             l.issue_key as issueKey,
+            l.issue_summary as issueSummary,
             f.status_at_sprint_start as statusAtSprintStart,
             l.status_at_sprint_end as statusAtSprintEnd,
             l.transition_date as transitionDate
