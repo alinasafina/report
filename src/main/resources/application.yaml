@@ -1,0 +1,49 @@
+server:
+  port: 8089
+
+spring:
+  application:
+    name: report
+  jpa:
+    properties:
+      hibernate:
+        enable_lazy_load_no_trans: true
+        default_schema: public
+    open-in-view: false
+  datasource:
+    url: jdbc:postgresql://localhost:5432/jira
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-timeout: 20000
+      maximum-pool-size: 10
+      minimum-idle: 2
+  liquibase:
+    enabled: true
+    change-log: classpath:liquibase/change-log.xml
+    default-schema: public
+    liquibase-schema: public
+  session:
+    jdbc:
+      initialize-schema: always
+
+logging:
+  level:
+    com.zaxxer.hikari: INFO
+    org.hibernate.orm.connections.pooling: INFO
+
+jira:
+  base-url: 
+  pat: 
+  project-key: PREQ
+  sprintFieldId: customfield_12950
+  # Разработчик
+  developerFieldId: customfield_10173
+  # Тестировщик
+  #developerFieldId: customfield_10074 тестировщик
+  estimateFieldId: customfield_10473
+  epicLinkFieldId: customfield_14750
+  estimateFieldName: Оценка Разработки
+  #estimateFieldName: Оценка Тестирования
+  projectField: project

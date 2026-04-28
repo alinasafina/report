@@ -1,0 +1,94 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+    <changeSet author="zelinskaja" id="init_role">
+        <sqlFile dbms="postgresql"
+                 path="scripts/init_role.sql"
+                 encoding="UTF-8"
+                 endDelimiter="/"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+        <comment>Инициализация роли</comment>
+    </changeSet>
+
+    <changeSet author="zelinskaja" id="statuses">
+        <sqlFile dbms="postgresql"
+                 path="scripts/status.sql"
+                 encoding="UTF-8"
+                 endDelimiter="/"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"
+        />
+    </changeSet>
+
+    <changeSet author="zelinskaja" id="sprints">
+        <sqlFile dbms="postgresql"
+                 path="scripts/sprint.sql"
+                 encoding="UTF-8"
+                 endDelimiter="/"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"
+        />
+    </changeSet>
+
+    <changeSet author="zelinskaja" id="employee">
+        <sqlFile dbms="postgresql"
+                 path="scripts/employee.sql"
+                 encoding="UTF-8"
+                 endDelimiter="/"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"
+        />
+    </changeSet>
+
+    <changeSet author="zelinskaja" id="insert_employee">
+        <sqlFile dbms="postgresql"
+                 path="scripts/insert_employee.sql"
+                 encoding="UTF-8"
+                 endDelimiter="/"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"
+        />
+    </changeSet>
+
+    <changeSet author="zelinskaja" id="jira_sprint_status_transition">
+        <sqlFile dbms="postgresql"
+                 path="scripts/jira_sprint_status_transition.sql"
+                 encoding="UTF-8"
+                 endDelimiter="/"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"
+        />
+    </changeSet>
+
+    <changeSet author="zelinskaja" id="jira_sprint_employee_effort">
+        <sqlFile dbms="postgresql"
+                 path="scripts/jira_sprint_employee_effort.sql"
+                 encoding="UTF-8"
+                 endDelimiter="/"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"
+        />
+    </changeSet>
+
+    <changeSet author="zelinskaja" id="jira_sprint_tempo_planned_status">
+        <sqlFile dbms="postgresql"
+                 path="scripts/jira_sprint_tempo_planned_status.sql"
+                 encoding="UTF-8"
+                 endDelimiter="/"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"
+        />
+    </changeSet>
+</databaseChangeLog>
