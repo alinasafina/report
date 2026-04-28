@@ -96,6 +96,25 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             CellStyle headerStyle = wb.createCellStyle();
             headerStyle.setFont(boldFont);
 
+            short percentFormat = wb.createDataFormat().getFormat("0%");
+
+            Font orangeFont = wb.createFont();
+            orangeFont.setColor(IndexedColors.ORANGE.getIndex());
+
+            Font redFont = wb.createFont();
+            redFont.setColor(IndexedColors.RED.getIndex());
+
+            CellStyle percentStyle = wb.createCellStyle();
+            percentStyle.setDataFormat(percentFormat);
+
+            CellStyle orangePercentStyle = wb.createCellStyle();
+            orangePercentStyle.setDataFormat(percentFormat);
+            orangePercentStyle.setFont(orangeFont);
+
+            CellStyle redPercentStyle = wb.createCellStyle();
+            redPercentStyle.setDataFormat(percentFormat);
+            redPercentStyle.setFont(redFont);
+
             CellStyle legendGreyStyle = wb.createCellStyle();
             legendGreyStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
             legendGreyStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
@@ -219,7 +238,8 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             sh.createCell(4).setCellValue("Разработка завершена (из плана)");
             sh.createCell(5).setCellValue("Разработка не завершена (из плана)");
             sh.createCell(6).setCellValue("Вне плана");
-            for (int i = 0; i < 7; i++) {
+            sh.createCell(7).setCellValue("% завершения плана");
+            for (int i = 0; i < 8; i++) {
                 sh.getCell(i).setCellStyle(headerStyle);
             }
 
@@ -232,10 +252,23 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                 x.createCell(4).setCellValue(row.getDoneTasksCount() == null ? 0 : row.getDoneTasksCount());
                 x.createCell(5).setCellValue(row.getNotClosedTasksCount() == null ? 0 : row.getNotClosedTasksCount());
                 x.createCell(6).setCellValue(row.getOutOfPlanTasksCount() == null ? 0 : row.getOutOfPlanTasksCount());
+
+                long plannedCount = row.getPlannedTasksCount() == null ? 0 : row.getPlannedTasksCount();
+                long doneCount = row.getDoneTasksCount() == null ? 0 : row.getDoneTasksCount();
+                double doneRatio = plannedCount > 0 ? (double) doneCount / plannedCount : 0d;
+                var percentCell = x.createCell(7);
+                percentCell.setCellValue(doneRatio);
+                if (doneRatio < 0.5d) {
+                    percentCell.setCellStyle(redPercentStyle);
+                } else if (doneRatio < 0.75d) {
+                    percentCell.setCellStyle(orangePercentStyle);
+                } else {
+                    percentCell.setCellStyle(percentStyle);
+                }
             }
 
-            s2.setAutoFilter(new CellRangeAddress(sh.getRowNum(), sh.getRowNum(), 0, 6));
-            for (int i = 0; i < 7; i++) s2.autoSizeColumn(i);
+            s2.setAutoFilter(new CellRangeAddress(sh.getRowNum(), sh.getRowNum(), 0, 7));
+            for (int i = 0; i < 8; i++) s2.autoSizeColumn(i);
 
             wb.setSheetOrder("1.1 План-факт кол-во задач", 0);
             wb.setSheetOrder("1.2 План-факт задачи", 1);
