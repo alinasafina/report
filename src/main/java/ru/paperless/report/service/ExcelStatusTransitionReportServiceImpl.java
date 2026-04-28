@@ -94,20 +94,17 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
             m2.createCell(1).setCellValue(formatStatusListOrAll(f.toIdsOriginal(), statusNamesById));
 
             Row m3 = s1.createRow(r++);
-            m3.createCell(0).setCellValue("ID Спринта");
-            m3.createCell(1).setCellValue(StringUtils.hasText(f.sprintIdsTextOriginal()) ? f.sprintIdsTextOriginal().trim() : "ALL");
-
-            Row m4 = s1.createRow(r++);
-            m4.createCell(0).setCellValue("Сотрудник");
-            m4.createCell(1).setCellValue(String.join(", ", f.employees()));
+            m3.createCell(0).setCellValue("Сотрудник");
+            m3.createCell(1).setCellValue(String.join(", ", f.employees()));
 
             r++; // empty row
 
             Row header = s1.createRow(r++);
             header.createCell(0).setCellValue("Спринт");
             header.createCell(1).setCellValue("Сотрудник");
-            header.createCell(2).setCellValue("Количество возвратов");
-            for (int i = 0; i < 3; i++) {
+            header.createCell(2).setCellValue("Из статуса");
+            header.createCell(3).setCellValue("Количество возвратов");
+            for (int i = 0; i < 4; i++) {
                 header.getCell(i).setCellStyle(headerStyle);
             }
 
@@ -115,12 +112,13 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
                 Row x = s1.createRow(r++);
                 x.createCell(0).setCellValue(nullSafe(row.getSprintName()));
                 x.createCell(1).setCellValue(nullSafe(row.getEmployee()));
-                x.createCell(2).setCellValue(row.getTransitionsCount() == null ? 0 : row.getTransitionsCount());
+                x.createCell(2).setCellValue(nullSafe(row.getFromStatusName()));
+                x.createCell(3).setCellValue(row.getTransitionsCount() == null ? 0 : row.getTransitionsCount());
             }
 
-            s1.setAutoFilter(new CellRangeAddress(header.getRowNum(), header.getRowNum(), 0, 2));
-            for (int i = 0; i < 3; i++) s1.autoSizeColumn(i);
-            s1.setColumnWidth(1, 25 * 256);
+            s1.setAutoFilter(new CellRangeAddress(header.getRowNum(), header.getRowNum(), 0, 3));
+            for (int i = 0; i < 4; i++) s1.autoSizeColumn(i);
+            s1.setColumnWidth(1, 35 * 256);
 
             // ---------- Sheet 2: Details ----------
             Sheet s2 = wb.createSheet("2.2 Возвраты по задачам");
