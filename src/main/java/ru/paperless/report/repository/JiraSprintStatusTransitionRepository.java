@@ -3,6 +3,7 @@ package ru.paperless.report.repository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import ru.paperless.report.dto.OutOfPlanTaskProjection;
 import ru.paperless.report.dto.TransitionDetailRow;
 import ru.paperless.report.dto.TransitionReportRow;
 import ru.paperless.report.entity.JiraSprintStatusTransition;
@@ -88,6 +89,62 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
             @Param("fromStatusIds") List<Long> fromStatusIds,
             @Param("useTo") boolean useTo,
             @Param("toStatusIds") List<Long> toStatusIds,
+            @Param("useSprints") boolean useSprints,
+            @Param("sprintIds") List<Long> sprintIds
+    );
+
+    @Query(value = """
+        with matched as (
+            select
+                t.sprint_id as sprint_id,
+                t.sprint_name as sprint_name,
+                t.final_assignee as employee,
+                t.issue_key as issue_key,
+                t.to_status_name as status_at_sprint_end,
+                t.transition_date as transition_date,
+                row_number() over (
+                    partition by t.sprint_id, t.final_assignee, t.issue_key
+                    order by t.transition_date desc nulls last, t.id desc
+                ) as rn
+            from jira_sprint_status_transition t
+            where t.final_assignee is not null
+              and t.final_assignee in (:employees)
+              and t.issue_key is not null
+              and (:useSprints = false or t.sprint_id in (:sprintIds))
+
+            union all
+
+            select
+                t.sprint_id as sprint_id,
+                t.sprint_name as sprint_name,
+                t.developer as employee,
+                t.issue_key as issue_key,
+                t.to_status_name as status_at_sprint_end,
+                t.transition_date as transition_date,
+                row_number() over (
+                    partition by t.sprint_id, t.developer, t.issue_key
+                    order by t.transition_date desc nulls last, t.id desc
+                ) as rn
+            from jira_sprint_status_transition t
+            where t.developer is not null
+              and t.developer in (:employees)
+              and t.issue_key is not null
+              and (:useSprints = false or t.sprint_id in (:sprintIds))
+              and (t.final_assignee is null or t.developer <> t.final_assignee)
+        )
+        select
+            sprint_id as sprintId,
+            sprint_name as sprintName,
+            employee as employee,
+            issue_key as issueKey,
+            status_at_sprint_end as statusAtSprintEnd,
+            transition_date as transitionDate
+        from matched
+        where rn = 1
+        order by sprint_id nulls last, employee, issue_key
+        """, nativeQuery = true)
+    List<OutOfPlanTaskProjection> getLatestTasksForPlanning(
+            @Param("employees") List<String> employees,
             @Param("useSprints") boolean useSprints,
             @Param("sprintIds") List<Long> sprintIds
     );

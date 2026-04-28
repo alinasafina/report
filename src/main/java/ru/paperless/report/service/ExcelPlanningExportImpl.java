@@ -2,23 +2,33 @@ package ru.paperless.report.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import ru.paperless.report.dto.OutOfPlanTaskProjection;
 import ru.paperless.report.dto.TempoPlannedDetailRow;
 import ru.paperless.report.dto.TempoPlannedSummaryRow;
 import ru.paperless.report.entity.Employee;
 import ru.paperless.report.repository.EmployeeRepository;
+import ru.paperless.report.repository.JiraSprintStatusTransitionRepository;
 import ru.paperless.report.repository.JiraSprintTempoPlannedStatusRepository;
 
-import org.springframework.stereotype.Service;
-
 import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -26,15 +36,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ExcelPlanningExportImpl implements ExcelPlanningExport {
     private final JiraSprintTempoPlannedStatusRepository tempoRepo;
+    private final JiraSprintStatusTransitionRepository transitionRepo;
     private final EmployeeRepository employeeRepo;
 
-    /**
-     * @param sprintIds       "101 102" через пробел; пусто/null -> ALL
-     * @param doneStatusNames имена статусов через пробел; пусто/null -> doneTasksCount=0
-     *                        <p>
-     *                        Важно: если в статусах бывают пробелы ("In Progress"), лучше передавать через кавычки,
-     *                        или поменять разделитель на ';'. См. parseStatusNames().
-     */
     @Override
     public byte[] buildXlsx(String sprintIds,
                             List<String> doneStatusNames,
@@ -44,20 +48,17 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
 
         Filter f = prepareFilter(getDevelopers(), sprintIds, doneStatusNames, notClosedStatusNames);
 
-        List<TempoPlannedDetailRow> details = tempoRepo.getDetails(
+        List<TempoPlannedDetailRow> plannedDetails = tempoRepo.getDetails(
                 true, f.employees(),
                 f.useSprints(), f.safeSprintIds()
         );
 
-        List<TempoPlannedSummaryRow> summary = tempoRepo.getSummary(
-                true, f.employees(),
-                f.useSprints(), f.safeSprintIds(),
-                f.useDone(), f.safeDoneStatusNames(),
-                f.useNotClosed(), f.safeNotClosedStatusNames()
-        );
+        List<TempoPlannedDetailRow> details = mergeWithOutOfPlanTasks(plannedDetails, f);
+        List<TempoPlannedSummaryRow> summary = aggregateSummary(details, f);
 
         return toXlsxBytes(details, summary, f);
     }
+
     private byte[] toXlsxBytes(List<TempoPlannedDetailRow> details,
                                List<TempoPlannedSummaryRow> summary,
                                Filter f) {
@@ -65,7 +66,10 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
         try (Workbook wb = new XSSFWorkbook();
              ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
 
-            // ---------- Sheet 1: Details ----------
+            CellStyle outOfPlanStyle = wb.createCellStyle();
+            outOfPlanStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            outOfPlanStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
             Sheet s1 = wb.createSheet("1.2 План-факт задачи");
             int r = 0;
 
@@ -97,7 +101,7 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             m4.createCell(0).setCellValue("Сотрудник");
             m4.createCell(1).setCellValue(String.join(", ", f.employees()));
 
-            r++; // пустая строка
+            r++;
 
             Row h = s1.createRow(r++);
             h.createCell(0).setCellValue("ID спринта");
@@ -116,14 +120,23 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                 x.createCell(2).setCellValue(nullSafe(row.getEmployee()));
                 x.createCell(3).setCellValue(nullSafe(row.getIssueKey()));
                 x.createCell(4).setCellValue(nullSafe(row.getIssueSummary()));
-                x.createCell(5).setCellValue(row.getPlannedSeconds() == null ? 0 : row.getPlannedSeconds());
+                if (row.getPlannedSeconds() != null) {
+                    x.createCell(5).setCellValue(row.getPlannedSeconds());
+                } else {
+                    x.createCell(5).setCellValue("");
+                }
                 x.createCell(6).setCellValue(nullSafe(row.getStatusAtSprintStart()));
                 x.createCell(7).setCellValue(nullSafe(row.getStatusAtSprintEnd()));
+
+                if (Boolean.TRUE.equals(row.getOutOfPlan())) {
+                    for (int i = 0; i < 8; i++) {
+                        x.getCell(i).setCellStyle(outOfPlanStyle);
+                    }
+                }
             }
 
             for (int i = 0; i < 8; i++) s1.autoSizeColumn(i);
 
-            // ---------- Sheet 2: Summary ----------
             Sheet s2 = wb.createSheet("1.1 План-факт кол-во задач");
             int d = 0;
 
@@ -134,6 +147,7 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             sh.createCell(3).setCellValue("Количество задач запланировано");
             sh.createCell(4).setCellValue("Количество done-задач");
             sh.createCell(5).setCellValue("Количество не закрытых задач");
+            sh.createCell(6).setCellValue("Вне плана");
 
             for (TempoPlannedSummaryRow row : summary) {
                 Row x = s2.createRow(d++);
@@ -143,9 +157,10 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                 x.createCell(3).setCellValue(row.getPlannedTasksCount() == null ? 0 : row.getPlannedTasksCount());
                 x.createCell(4).setCellValue(row.getDoneTasksCount() == null ? 0 : row.getDoneTasksCount());
                 x.createCell(5).setCellValue(row.getNotClosedTasksCount() == null ? 0 : row.getNotClosedTasksCount());
+                x.createCell(6).setCellValue(row.getOutOfPlanTasksCount() == null ? 0 : row.getOutOfPlanTasksCount());
             }
 
-            for (int i = 0; i < 6; i++) s2.autoSizeColumn(i);
+            for (int i = 0; i < 7; i++) s2.autoSizeColumn(i);
 
             wb.write(baos);
             return baos.toByteArray();
@@ -155,7 +170,94 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
         }
     }
 
-    // ---------- filter prep ----------
+    private List<TempoPlannedDetailRow> mergeWithOutOfPlanTasks(List<TempoPlannedDetailRow> plannedDetails, Filter f) {
+        List<TempoPlannedDetailRow> result = new ArrayList<>(plannedDetails);
+        Set<String> plannedKeys = plannedDetails.stream()
+                .map(this::toDetailKey)
+                .collect(Collectors.toCollection(HashSet::new));
+
+        List<OutOfPlanTaskProjection> transitionTasks = transitionRepo.getLatestTasksForPlanning(
+                f.employees(),
+                f.useSprints(),
+                f.safeSprintIds()
+        );
+
+        for (OutOfPlanTaskProjection task : transitionTasks) {
+            TempoPlannedDetailRow row = new TempoPlannedDetailRow(
+                    task.getSprintId(),
+                    task.getSprintName(),
+                    task.getEmployee(),
+                    task.getIssueKey(),
+                    null,
+                    null,
+                    null,
+                    task.getStatusAtSprintEnd(),
+                    true
+            );
+
+            if (plannedKeys.add(toDetailKey(row))) {
+                result.add(row);
+            }
+        }
+
+        result.sort(Comparator
+                .comparing(TempoPlannedDetailRow::getSprintId, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(TempoPlannedDetailRow::getEmployee, Comparator.nullsLast(String::compareTo))
+                .thenComparing(TempoPlannedDetailRow::getIssueKey, Comparator.nullsLast(String::compareTo)));
+
+        return result;
+    }
+
+    private List<TempoPlannedSummaryRow> aggregateSummary(List<TempoPlannedDetailRow> details, Filter f) {
+        record SummaryKey(String employee, Long sprintId, String sprintName) {}
+        class SummaryAcc {
+            long plannedTasksCount;
+            long doneTasksCount;
+            long notClosedTasksCount;
+            long outOfPlanTasksCount;
+        }
+
+        Set<String> doneStatuses = new HashSet<>(f.doneStatusNamesOriginal());
+        Set<String> notClosedStatuses = new HashSet<>(f.notClosedStatusNamesOriginal());
+        Map<SummaryKey, SummaryAcc> aggregated = new HashMap<>();
+
+        for (TempoPlannedDetailRow row : details) {
+            SummaryKey key = new SummaryKey(row.getEmployee(), row.getSprintId(), row.getSprintName());
+            SummaryAcc acc = aggregated.computeIfAbsent(key, k -> new SummaryAcc());
+
+            if (Boolean.TRUE.equals(row.getOutOfPlan())) {
+                acc.outOfPlanTasksCount++;
+                continue;
+            }
+
+            acc.plannedTasksCount++;
+
+            if (StringUtils.hasText(row.getStatusAtSprintEnd()) && doneStatuses.contains(row.getStatusAtSprintEnd())) {
+                acc.doneTasksCount++;
+            }
+            if (StringUtils.hasText(row.getStatusAtSprintEnd()) && notClosedStatuses.contains(row.getStatusAtSprintEnd())) {
+                acc.notClosedTasksCount++;
+            }
+        }
+
+        return aggregated.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(
+                        Comparator.comparing(SummaryKey::employee, Comparator.nullsLast(String::compareTo))
+                                .thenComparing(SummaryKey::sprintId, Comparator.nullsLast(Comparator.naturalOrder()))
+                                .thenComparing(SummaryKey::sprintName, Comparator.nullsLast(String::compareTo))
+                ))
+                .map(e -> new TempoPlannedSummaryRow(
+                        e.getKey().employee(),
+                        e.getKey().sprintId(),
+                        e.getKey().sprintName(),
+                        e.getValue().plannedTasksCount,
+                        e.getValue().doneTasksCount,
+                        e.getValue().notClosedTasksCount,
+                        e.getValue().outOfPlanTasksCount
+                ))
+                .toList();
+    }
+
     private Filter prepareFilter(List<String> employees,
                                  String sprintIdsText,
                                  List<String> doneStatusNames,
@@ -206,6 +308,13 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                 .filter(StringUtils::hasText)
                 .distinct()
                 .toList();
+    }
+
+    private String toDetailKey(TempoPlannedDetailRow row) {
+        return String.join("|",
+                nullSafe(row.getEmployee()),
+                row.getSprintId() == null ? "" : String.valueOf(row.getSprintId()),
+                nullSafe(row.getIssueKey()));
     }
 
     private String nullSafe(String s) {
