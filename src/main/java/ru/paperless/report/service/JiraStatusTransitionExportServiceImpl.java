@@ -6,12 +6,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import ru.paperless.report.client.JiraFeignClient;
 import ru.paperless.report.client.dto.request.JiraSearchRequest;
+import ru.paperless.report.client.dto.request.TransitionExportRequest;
 import ru.paperless.report.client.dto.response.JiraIssueResponse;
 import ru.paperless.report.client.dto.response.JiraSearchResponse;
 import ru.paperless.report.dto.SprintInfo;
-import ru.paperless.report.dto.StatusSets;
-import ru.paperless.report.entity.*;
-import ru.paperless.report.client.dto.request.TransitionExportRequest;
+import ru.paperless.report.entity.Employee;
+import ru.paperless.report.entity.JiraSprintStatusTransition;
 import ru.paperless.report.repository.*;
 
 import java.time.OffsetDateTime;
@@ -26,7 +26,6 @@ public class JiraStatusTransitionExportServiceImpl implements JiraStatusTransiti
     private final JiraFeignClient jiraClient;
     private final GeneralMethodsService generalMethodsService;
 
-    private final ProjectJiraStatusRepository statusRepo;
     private final EmployeeRepository employeeRepo;
     private final JiraSprintStatusTransitionRepository transitionRepo;
 
@@ -42,10 +41,7 @@ public class JiraStatusTransitionExportServiceImpl implements JiraStatusTransiti
         // 1) developers
         Set<String> developerFilter = getDevelopers();
 
-        // 2) statuses: name -> id
-        StatusSets statuses = resolveStatusIds(req);
-
-        // 3) sprint ids
+        // 2) sprint ids
         List<Long> sprintIds = generalMethodsService.resolveSprintIds(req);
 
         if (sprintIds.isEmpty()) {
@@ -126,9 +122,6 @@ public class JiraStatusTransitionExportServiceImpl implements JiraStatusTransiti
                         Long fromId = generalMethodsService.parseLongSafe(it.getFrom());
                         Long toId = generalMethodsService.parseLongSafe(it.getTo());
 
-                        if (!statuses.fromIds().contains(fromId)) continue;
-                        if (!statuses.toIds().contains(toId)) continue;
-
                         // сохраняем (sprint_id тут у issue может быть несколько — как в bash, пишем строкой имена)
                         // если тебе нужно сохранить именно sprint_id (и по одному на строку) — скажи, сделаю split.
                         JiraSprintStatusTransition row = JiraSprintStatusTransition.builder()
@@ -168,40 +161,6 @@ public class JiraStatusTransitionExportServiceImpl implements JiraStatusTransiti
                 .map(Employee::getFullName)
                 .filter(StringUtils::hasText)
                 .collect(Collectors.toSet());
-    }
-
-    private StatusSets resolveStatusIds(TransitionExportRequest req) {
-        List<String> fromNames = Optional.ofNullable(req.getFromStatuses()).orElse(List.of());
-        List<String> toNames = Optional.ofNullable(req.getToStatuses()).orElse(List.of());
-
-        Map<String, Long> nameToId = statusRepo.findByStatusNameIn(union(fromNames, toNames))
-                .stream()
-                .collect(Collectors.toMap(ProjectJiraStatus::getStatusName, ProjectJiraStatus::getStatusId, (a, b) -> a));
-
-        var allNames = statusRepo.findAll().stream().map(ProjectJiraStatus::getStatusId).collect(Collectors.toSet());
-        Set<Long> fromIds;
-
-        if (fromNames.isEmpty()) {
-            fromIds = allNames;
-        } else {
-            fromIds = fromNames.stream()
-                    .map(nameToId::get)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet());
-        }
-
-        Set<Long> toIds;
-
-        if (toNames.isEmpty()) {
-            toIds = allNames;
-        } else {
-            toIds = toNames.stream()
-                    .map(nameToId::get)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet());
-        }
-
-        return new StatusSets(fromIds, toIds);
     }
 
     private boolean allowByPeopleFilter(String assignee, String developer, Set<String> filter) {
@@ -247,13 +206,6 @@ public class JiraStatusTransitionExportServiceImpl implements JiraStatusTransiti
         if (end < 0) end = sub.indexOf(']');
         if (end < 0) return sub;
         return sub.substring(0, end);
-    }
-
-    private List<String> union(List<String> a, List<String> b) {
-        List<String> r = new ArrayList<>();
-        r.addAll(a);
-        r.addAll(b);
-        return r;
     }
 
     private JiraIssueResponse getIssue(JiraFeignClient jiraClient, String key, String fieldsParam) throws Exception {
