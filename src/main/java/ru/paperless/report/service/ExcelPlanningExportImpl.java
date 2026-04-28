@@ -195,6 +195,7 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
 
     private List<TempoPlannedDetailRow> mergeWithOutOfPlanTasks(List<TempoPlannedDetailRow> plannedDetails, Filter f) {
         List<TempoPlannedDetailRow> result = new ArrayList<>(plannedDetails);
+        Set<String> doneStatuses = new HashSet<>(f.doneStatusNamesOriginal());
         Set<String> plannedIssueKeys = plannedDetails.stream()
                 .map(this::toSprintIssueKey)
                 .collect(Collectors.toCollection(HashSet::new));
@@ -207,6 +208,11 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
         );
 
         for (OutOfPlanTaskProjection task : transitionTasks) {
+            if (StringUtils.hasText(task.getStatusAtSprintStart())
+                    && doneStatuses.contains(task.getStatusAtSprintStart())) {
+                continue;
+            }
+
             TempoPlannedDetailRow row = new TempoPlannedDetailRow(
                     task.getSprintId(),
                     task.getSprintName(),
