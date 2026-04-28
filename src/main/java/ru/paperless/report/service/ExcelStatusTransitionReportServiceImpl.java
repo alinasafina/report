@@ -1,24 +1,31 @@
 package ru.paperless.report.service;
 
 import lombok.RequiredArgsConstructor;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import ru.paperless.report.dto.TransitionDetailRow;
 import ru.paperless.report.dto.TransitionReportRow;
 import ru.paperless.report.entity.Employee;
+import ru.paperless.report.entity.ProjectJiraStatus;
 import ru.paperless.report.repository.EmployeeRepository;
 import ru.paperless.report.repository.JiraSprintStatusTransitionRepository;
+import ru.paperless.report.repository.ProjectJiraStatusRepository;
 
 import java.io.ByteArrayOutputStream;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -28,6 +35,7 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
 
     private final JiraSprintStatusTransitionRepository reportRepository;
     private final EmployeeRepository employeeRepo;
+    private final ProjectJiraStatusRepository projectJiraStatusRepository;
 
     private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
                     .withZone(ZoneId.systemDefault());
@@ -66,6 +74,12 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
 
         try (Workbook wb = new XSSFWorkbook();
              ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            Map<Long, String> statusNamesById = getStatusNamesById(f);
+            Font boldFont = wb.createFont();
+            boldFont.setBold(true);
+
+            CellStyle headerStyle = wb.createCellStyle();
+            headerStyle.setFont(boldFont);
 
             // ---------- Sheet 1: Summary ----------
             Sheet s1 = wb.createSheet("2.1 Количество возвратов по спринтам");
@@ -73,11 +87,11 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
 
             Row m1 = s1.createRow(r++);
             m1.createCell(0).setCellValue("Из статуса");
-            m1.createCell(1).setCellValue(formatListOrAll(f.fromIdsOriginal()));
+            m1.createCell(1).setCellValue(formatStatusListOrAll(f.fromIdsOriginal(), statusNamesById));
 
             Row m2 = s1.createRow(r++);
             m2.createCell(0).setCellValue("В статус");
-            m2.createCell(1).setCellValue(formatListOrAll(f.toIdsOriginal()));
+            m2.createCell(1).setCellValue(formatStatusListOrAll(f.toIdsOriginal(), statusNamesById));
 
             Row m3 = s1.createRow(r++);
             m3.createCell(0).setCellValue("ID Спринта");
@@ -90,43 +104,50 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
             r++; // empty row
 
             Row header = s1.createRow(r++);
-            header.createCell(0).setCellValue("Сотрудник");
-            header.createCell(1).setCellValue("ID спринта");
-            header.createCell(2).setCellValue("Спринт");
-            header.createCell(3).setCellValue("Количество возвратов");
+            header.createCell(0).setCellValue("Спринт");
+            header.createCell(1).setCellValue("Сотрудник");
+            header.createCell(2).setCellValue("Количество возвратов");
+            for (int i = 0; i < 3; i++) {
+                header.getCell(i).setCellStyle(headerStyle);
+            }
 
             for (TransitionReportRow row : summaryRows) {
                 Row x = s1.createRow(r++);
-                x.createCell(0).setCellValue(nullSafe(row.getEmployee()));
-                x.createCell(1).setCellValue(row.getSprintId() == null ? "" : String.valueOf(row.getSprintId()));
-                x.createCell(2).setCellValue(nullSafe(row.getSprintName()));
-                x.createCell(3).setCellValue(row.getTransitionsCount() == null ? 0 : row.getTransitionsCount());
+                x.createCell(0).setCellValue(nullSafe(row.getSprintName()));
+                x.createCell(1).setCellValue(nullSafe(row.getEmployee()));
+                x.createCell(2).setCellValue(row.getTransitionsCount() == null ? 0 : row.getTransitionsCount());
             }
 
-            for (int i = 0; i < 4; i++) s1.autoSizeColumn(i);
+            s1.setAutoFilter(new CellRangeAddress(header.getRowNum(), header.getRowNum(), 0, 2));
+            for (int i = 0; i < 3; i++) s1.autoSizeColumn(i);
+            s1.setColumnWidth(1, 25 * 256);
 
             // ---------- Sheet 2: Details ----------
             Sheet s2 = wb.createSheet("2.2 Возвраты по задачам");
             int d = 0;
 
             Row dh = s2.createRow(d++);
-            dh.createCell(0).setCellValue("Номер задачи");          // "название задачи" => issue_key
-            dh.createCell(1).setCellValue("Спринт");
-            dh.createCell(2).setCellValue("Из статуса");
-            dh.createCell(3).setCellValue("В статус");
-            dh.createCell(4).setCellValue("Разработчик");
+            dh.createCell(0).setCellValue("Спринт");
+            dh.createCell(1).setCellValue("Сотрудник");
+            dh.createCell(2).setCellValue("Номер задачи");          // "название задачи" => issue_key
+            dh.createCell(3).setCellValue("Из статуса");
+            dh.createCell(4).setCellValue("В статус");
             dh.createCell(5).setCellValue("Дата перехода");
+            for (int i = 0; i < 6; i++) {
+                dh.getCell(i).setCellStyle(headerStyle);
+            }
 
             for (TransitionDetailRow row : detailRows) {
                 Row x = s2.createRow(d++);
-                x.createCell(0).setCellValue(nullSafe(row.getIssueKey()));
-                x.createCell(1).setCellValue(nullSafe(row.getSprintName()));
-                x.createCell(2).setCellValue(nullSafe(row.getFromStatusName()));
-                x.createCell(3).setCellValue(nullSafe(row.getToStatusName()));
-                x.createCell(4).setCellValue(nullSafe(row.getDeveloper()));
+                x.createCell(0).setCellValue(nullSafe(row.getSprintName()));
+                x.createCell(1).setCellValue(nullSafe(row.getDeveloper()));
+                x.createCell(2).setCellValue(nullSafe(row.getIssueKey()));
+                x.createCell(3).setCellValue(nullSafe(row.getFromStatusName()));
+                x.createCell(4).setCellValue(nullSafe(row.getToStatusName()));
                 x.createCell(5).setCellValue(formatDate(row.getTransitionDate()));
             }
 
+            s2.setAutoFilter(new CellRangeAddress(dh.getRowNum(), dh.getRowNum(), 0, 5));
             for (int i = 0; i < 6; i++) s2.autoSizeColumn(i);
 
             wb.write(baos);
@@ -199,9 +220,33 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
                 .toList();
     }
 
-    private String formatListOrAll(List<Long> ids) {
+    private String formatStatusListOrAll(List<Long> ids, Map<Long, String> statusNamesById) {
         if (ids == null || ids.isEmpty()) return "ALL";
-        return ids.stream().map(String::valueOf).collect(Collectors.joining(","));
+        return ids.stream()
+                .map(id -> statusNamesById.getOrDefault(id, String.valueOf(id)))
+                .collect(Collectors.joining(", "));
+    }
+
+    private Map<Long, String> getStatusNamesById(Filter f) {
+        List<Long> statusIds = java.util.stream.Stream.concat(
+                        f.fromIdsOriginal().stream(),
+                        f.toIdsOriginal().stream()
+                )
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (statusIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, String> statusNamesById = new HashMap<>();
+        for (ProjectJiraStatus status : projectJiraStatusRepository.findAllById(statusIds)) {
+            if (status.getStatusId() != null && StringUtils.hasText(status.getStatusName())) {
+                statusNamesById.put(status.getStatusId(), status.getStatusName());
+            }
+        }
+        return statusNamesById;
     }
 
     private String nullSafe(String s) {
