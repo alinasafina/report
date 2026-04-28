@@ -6,6 +6,7 @@ import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -83,6 +84,28 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             outOfPlanNotDoneStyle.cloneStyleFrom(outOfPlanStyle);
             outOfPlanNotDoneStyle.setFont(notDoneFont);
 
+            CellStyle legendHeaderStyle = wb.createCellStyle();
+            legendHeaderStyle.setAlignment(HorizontalAlignment.CENTER);
+
+            Font italicFont = wb.createFont();
+            italicFont.setItalic(true);
+
+            Font boldFont = wb.createFont();
+            boldFont.setBold(true);
+
+            CellStyle headerStyle = wb.createCellStyle();
+            headerStyle.setFont(boldFont);
+
+            CellStyle legendGreyStyle = wb.createCellStyle();
+            legendGreyStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            legendGreyStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            legendGreyStyle.setFont(italicFont);
+            legendGreyStyle.setAlignment(HorizontalAlignment.CENTER);
+
+            CellStyle legendBrickStyle = wb.createCellStyle();
+            legendBrickStyle.setFont(notDoneFont);
+            legendBrickStyle.setAlignment(HorizontalAlignment.CENTER);
+
             Sheet s1 = wb.createSheet("1.2 План-факт задачи");
             int r = 0;
 
@@ -114,6 +137,23 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             m4.createCell(0).setCellValue("Сотрудник");
             m4.createCell(1).setCellValue(String.join(", ", f.employees()));
 
+            Row legendHeader = getOrCreateRow(s1, 0);
+            legendHeader.createCell(5).setCellValue("Легенда:");
+            legendHeader.getCell(5).setCellStyle(legendHeaderStyle);
+            legendHeader.createCell(6).setCellValue("");
+            legendHeader.getCell(6).setCellStyle(legendHeaderStyle);
+            s1.addMergedRegion(new CellRangeAddress(0, 0, 5, 6));
+
+            Row legendRow1 = getOrCreateRow(s1, 1);
+            legendRow1.createCell(5).setCellValue("Внеплан Sprint'a");
+            legendRow1.createCell(6).setCellValue("Серый");
+            legendRow1.getCell(6).setCellStyle(legendGreyStyle);
+
+            Row legendRow2 = getOrCreateRow(s1, 2);
+            legendRow2.createCell(5).setCellValue("Разработка не завершена");
+            legendRow2.createCell(6).setCellValue("Кирпичный");
+            legendRow2.getCell(6).setCellStyle(legendBrickStyle);
+
             r++;
 
             Row h = s1.createRow(r++);
@@ -125,6 +165,9 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             h.createCell(5).setCellValue("Запланировано, ч");
             h.createCell(6).setCellValue("Статус на начало");
             h.createCell(7).setCellValue("Статус на конец");
+            for (int i = 0; i < 8; i++) {
+                h.getCell(i).setCellStyle(headerStyle);
+            }
 
             for (TempoPlannedDetailRow row : details) {
                 Row x = s1.createRow(r++);
@@ -176,6 +219,9 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             sh.createCell(4).setCellValue("Разработка завершена (из плана)");
             sh.createCell(5).setCellValue("Разработка не завершена (из плана)");
             sh.createCell(6).setCellValue("Вне плана");
+            for (int i = 0; i < 7; i++) {
+                sh.getCell(i).setCellStyle(headerStyle);
+            }
 
             for (TempoPlannedSummaryRow row : summary) {
                 Row x = s2.createRow(d++);
@@ -190,6 +236,9 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
 
             s2.setAutoFilter(new CellRangeAddress(sh.getRowNum(), sh.getRowNum(), 0, 6));
             for (int i = 0; i < 7; i++) s2.autoSizeColumn(i);
+
+            wb.setSheetOrder("1.1 План-факт кол-во задач", 0);
+            wb.setSheetOrder("1.2 План-факт задачи", 1);
 
             wb.write(baos);
             return baos.toByteArray();
@@ -362,6 +411,11 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
 
     private String nullSafe(String s) {
         return s == null ? "" : s;
+    }
+
+    private Row getOrCreateRow(Sheet sheet, int rowIndex) {
+        Row row = sheet.getRow(rowIndex);
+        return row != null ? row : sheet.createRow(rowIndex);
     }
 
     private record Filter(
