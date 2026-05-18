@@ -200,7 +200,7 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
                 String stEnd = resolveStatusAtEnd(full, sp.endDate());
 
                 JiraSprintTempoPlannedStatus row = JiraSprintTempoPlannedStatus.builder()
-                        .projectKey(projectKey)
+                        .projectKey(extractProjectKey(issueKey))
                         .sprintId(sp.id())
                         .sprintName(sp.name())
                         .issueKey(issueKey)
@@ -233,6 +233,19 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
         }
         Object epicValue = full.getFields().get(epicLinkFieldId);
         return epicValue != null ? epicValue.toString() : null;
+    }
+
+    private String extractProjectKey(String issueKey) {
+        if (!StringUtils.hasText(issueKey)) {
+            return projectKey;
+        }
+
+        int delimiterIndex = issueKey.indexOf('-');
+        if (delimiterIndex <= 0) {
+            return issueKey;
+        }
+
+        return issueKey.substring(0, delimiterIndex).trim().toUpperCase();
     }
 
     private boolean matchesProjectKey(TempoAllocationDto allocation) {

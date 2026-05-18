@@ -14,6 +14,7 @@ public class TempoPlannedDetailRow {
     private String statusAtSprintStart;
     private String statusAtSprintEnd;
     private Boolean outOfPlan;
+    private Boolean coveredByPlannedPreq;
 
     public TempoPlannedDetailRow(Long sprintId,
                                  String sprintName,
@@ -24,7 +25,7 @@ public class TempoPlannedDetailRow {
                                  Long plannedSeconds,
                                  String statusAtSprintStart,
                                  String statusAtSprintEnd) {
-        this(sprintId, sprintName, employee, issueKey, issueSummary, epicKey, plannedSeconds, statusAtSprintStart, statusAtSprintEnd, false);
+        this(sprintId, sprintName, employee, issueKey, issueSummary, epicKey, plannedSeconds, statusAtSprintStart, statusAtSprintEnd, false, false);
     }
 
     public TempoPlannedDetailRow(Long sprintId,
@@ -37,6 +38,20 @@ public class TempoPlannedDetailRow {
                                  String statusAtSprintStart,
                                  String statusAtSprintEnd,
                                  Boolean outOfPlan) {
+        this(sprintId, sprintName, employee, issueKey, issueSummary, epicKey, plannedSeconds, statusAtSprintStart, statusAtSprintEnd, outOfPlan, false);
+    }
+
+    public TempoPlannedDetailRow(Long sprintId,
+                                 String sprintName,
+                                 String employee,
+                                 String issueKey,
+                                 String issueSummary,
+                                 String epicKey,
+                                 Long plannedSeconds,
+                                 String statusAtSprintStart,
+                                 String statusAtSprintEnd,
+                                 Boolean outOfPlan,
+                                 Boolean coveredByPlannedPreq) {
         this.sprintId = sprintId;
         this.sprintName = sprintName;
         this.employee = employee;
@@ -47,5 +62,6 @@ public class TempoPlannedDetailRow {
         this.statusAtSprintStart = statusAtSprintStart;
         this.statusAtSprintEnd = statusAtSprintEnd;
         this.outOfPlan = outOfPlan;
+        this.coveredByPlannedPreq = coveredByPlannedPreq;
     }
 }

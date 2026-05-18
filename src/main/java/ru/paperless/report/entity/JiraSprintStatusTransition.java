@@ -31,6 +31,9 @@ public class JiraSprintStatusTransition {
     @Column(name = "issue_summary")
     private String issueSummary;
 
+    @Column(name = "epic_key")
+    private String epicKey;
+
     @Column(name = "final_assignee")
     private String finalAssignee;
 

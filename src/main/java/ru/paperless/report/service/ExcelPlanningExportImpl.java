@@ -194,7 +194,13 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                 boolean isDone = StringUtils.hasText(row.getStatusAtSprintEnd())
                         && doneStatuses.contains(row.getStatusAtSprintEnd());
 
-                if (Boolean.TRUE.equals(row.getOutOfPlan()) && !isDone) {
+                if (Boolean.TRUE.equals(row.getCoveredByPlannedPreq()) && !isDone) {
+                    for (int i = 0; i < 8; i++) {
+                        x.getCell(i).setCellStyle(notDoneStyle);
+                    }
+                } else if (Boolean.TRUE.equals(row.getCoveredByPlannedPreq())) {
+                    // Intentionally keep default style: task is covered by planned PREQ.
+                } else if (Boolean.TRUE.equals(row.getOutOfPlan()) && !isDone) {
                     for (int i = 0; i < 8; i++) {
                         x.getCell(i).setCellStyle(outOfPlanNotDoneStyle);
                     }
@@ -272,6 +278,10 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
         Set<String> plannedIssueKeys = plannedDetails.stream()
                 .map(this::toSprintIssueKey)
                 .collect(Collectors.toCollection(HashSet::new));
+        Set<String> plannedPreqKeys = plannedDetails.stream()
+                .map(this::toSprintPlannedPreqKey)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toCollection(HashSet::new));
         Set<String> addedOutOfPlanKeys = new HashSet<>();
 
         List<OutOfPlanTaskProjection> transitionTasks = transitionRepo.getLatestTasksForPlanning(
@@ -292,11 +302,12 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                     task.getEmployee(),
                     task.getIssueKey(),
                     task.getIssueSummary(),
-                    null,
+                    task.getEpicKey(),
                     null,
                     task.getStatusAtSprintStart(),
                     task.getStatusAtSprintEnd(),
-                    true
+                    true,
+                    isCoveredByPlannedPreq(task, plannedPreqKeys)
             );
 
             String sprintIssueKey = toSprintIssueKey(row);
@@ -330,7 +341,9 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             SummaryKey key = new SummaryKey(row.getEmployee(), row.getSprintId(), row.getSprintName());
             SummaryAcc acc = aggregated.computeIfAbsent(key, k -> new SummaryAcc());
 
-            if (Boolean.TRUE.equals(row.getOutOfPlan())) {
+            boolean coveredByPlannedPreq = Boolean.TRUE.equals(row.getCoveredByPlannedPreq());
+
+            if (Boolean.TRUE.equals(row.getOutOfPlan()) && !coveredByPlannedPreq) {
                 acc.outOfPlanTasksCount++;
                 continue;
             }
@@ -426,6 +439,31 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
         return String.join("|",
                 row.getSprintId() == null ? "" : String.valueOf(row.getSprintId()),
                 nullSafe(row.getIssueKey()));
+    }
+
+    private String toSprintPlannedPreqKey(TempoPlannedDetailRow row) {
+        if (!StringUtils.hasText(row.getIssueKey()) || !row.getIssueKey().toUpperCase().startsWith("PREQ-")) {
+            return "";
+        }
+        return String.join("|",
+                row.getSprintId() == null ? "" : String.valueOf(row.getSprintId()),
+                row.getIssueKey().trim().toUpperCase());
+    }
+
+    private boolean isCoveredByPlannedPreq(OutOfPlanTaskProjection task, Set<String> plannedPreqKeys) {
+        if (task == null || !StringUtils.hasText(task.getEpicKey())) {
+            return false;
+        }
+
+        String epicKey = task.getEpicKey().trim().toUpperCase();
+        if (!epicKey.startsWith("PREQ-")) {
+            return false;
+        }
+
+        String sprintKey = String.join("|",
+                task.getSprintId() == null ? "" : String.valueOf(task.getSprintId()),
+                epicKey);
+        return plannedPreqKeys.contains(sprintKey);
     }
 
     private String nullSafe(String s) {

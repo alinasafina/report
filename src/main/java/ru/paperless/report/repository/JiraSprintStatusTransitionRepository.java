@@ -263,6 +263,7 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
                 t.final_assignee as employee,
                 t.issue_key as issue_key,
                 t.issue_summary as issue_summary,
+                t.epic_key as epic_key,
                 t.from_status_name as status_at_sprint_start,
                 t.to_status_name as status_at_sprint_end,
                 t.transition_date as transition_date,
@@ -288,6 +289,7 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
                 t.developer as employee,
                 t.issue_key as issue_key,
                 t.issue_summary as issue_summary,
+                t.epic_key as epic_key,
                 t.from_status_name as status_at_sprint_start,
                 t.to_status_name as status_at_sprint_end,
                 t.transition_date as transition_date,
@@ -313,6 +315,7 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
                 employee,
                 issue_key,
                 issue_summary,
+                epic_key,
                 status_at_sprint_start
             from matched
             where start_rn = 1
@@ -324,6 +327,7 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
                 employee,
                 issue_key,
                 issue_summary,
+                epic_key,
                 status_at_sprint_end,
                 transition_date
             from matched
@@ -335,6 +339,7 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
             l.employee as employee,
             l.issue_key as issueKey,
             l.issue_summary as issueSummary,
+            coalesce(l.epic_key, f.epic_key) as epicKey,
             f.status_at_sprint_start as statusAtSprintStart,
             l.status_at_sprint_end as statusAtSprintEnd,
             l.transition_date as transitionDate

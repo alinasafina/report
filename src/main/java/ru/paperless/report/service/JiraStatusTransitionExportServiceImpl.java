@@ -35,6 +35,8 @@ public class JiraStatusTransitionExportServiceImpl implements JiraStatusTransiti
     private String developerFieldId;
     @org.springframework.beans.factory.annotation.Value("${jira.project-key}")
     private String projectKey;
+    @org.springframework.beans.factory.annotation.Value("${jira.epicLinkFieldId}")
+    private String epicLinkFieldId;
 
     @Override
     public int exportTransitions(TransitionExportRequest req) throws Exception {
@@ -90,7 +92,7 @@ public class JiraStatusTransitionExportServiceImpl implements JiraStatusTransiti
 
                 // тяжёлый запрос с changelog
                 // fields: assignee,sprintField,developerField — чтобы получить спринты+dev в issue (для записи)
-                String fieldsParam = String.join(",", "assignee", "summary", sprintFieldId, developerFieldId);
+                String fieldsParam = String.join(",", "assignee", "summary", sprintFieldId, developerFieldId, epicLinkFieldId);
                 JiraIssueResponse full = getIssue(jiraClient, key, fieldsParam);
 
                 List<SprintInfo> sprints = generalMethodsService.extractSprintsDetailed(full.getFields());
@@ -98,6 +100,7 @@ public class JiraStatusTransitionExportServiceImpl implements JiraStatusTransiti
                 String fullAssignee = generalMethodsService.extractAssigneeDisplayName(full.getFields());
                 String fullDeveloper = generalMethodsService.extractDeveloperValue(full.getFields());
                 String issueSummary = generalMethodsService.extractSummaryValue(full.getFields());
+                String epicKey = extractEpicKey(full);
 
                 if (!allowByPeopleFilter(fullAssignee, fullDeveloper, developerFilter)) {
                     continue;
@@ -131,6 +134,7 @@ public class JiraStatusTransitionExportServiceImpl implements JiraStatusTransiti
                                 .sprintName(sprintAtTransition != null ? sprintAtTransition.name() : null)
                                 .issueKey(full.getKey())
                                 .issueSummary(issueSummary)
+                                .epicKey(epicKey)
                                 .finalAssignee(fullAssignee)
                                 .developer(fullDeveloper)
                                 .fromStatusId(fromId)
@@ -254,5 +258,13 @@ public class JiraStatusTransitionExportServiceImpl implements JiraStatusTransiti
                                 .max(Comparator.comparing(SprintInfo::startDate))
                                 .orElse(sprints.get(0))
                 );
+    }
+
+    private String extractEpicKey(JiraIssueResponse full) {
+        if (full == null || full.getFields() == null || !StringUtils.hasText(epicLinkFieldId)) {
+            return null;
+        }
+        Object epicValue = full.getFields().get(epicLinkFieldId);
+        return epicValue != null ? epicValue.toString() : null;
     }
 }

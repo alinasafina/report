@@ -124,4 +124,15 @@
                  stripComments="true"
         />
     </changeSet>
+
+    <changeSet author="codex" id="jira_sprint_status_transition_epic_key">
+        <sqlFile dbms="postgresql"
+                 path="scripts/jira_sprint_status_transition_epic_key.sql"
+                 encoding="UTF-8"
+                 endDelimiter="/"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"
+        />
+    </changeSet>
 </databaseChangeLog>
