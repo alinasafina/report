@@ -9,6 +9,7 @@ public class TempoPlannedDetailRow {
     private String employee;
     private String issueKey;
     private String issueSummary;
+    private String epicKey;
     private Long plannedSeconds;
     private String statusAtSprintStart;
     private String statusAtSprintEnd;
@@ -19,10 +20,11 @@ public class TempoPlannedDetailRow {
                                  String employee,
                                  String issueKey,
                                  String issueSummary,
+                                 String epicKey,
                                  Long plannedSeconds,
                                  String statusAtSprintStart,
                                  String statusAtSprintEnd) {
-        this(sprintId, sprintName, employee, issueKey, issueSummary, plannedSeconds, statusAtSprintStart, statusAtSprintEnd, false);
+        this(sprintId, sprintName, employee, issueKey, issueSummary, epicKey, plannedSeconds, statusAtSprintStart, statusAtSprintEnd, false);
     }
 
     public TempoPlannedDetailRow(Long sprintId,
@@ -30,6 +32,7 @@ public class TempoPlannedDetailRow {
                                  String employee,
                                  String issueKey,
                                  String issueSummary,
+                                 String epicKey,
                                  Long plannedSeconds,
                                  String statusAtSprintStart,
                                  String statusAtSprintEnd,
@@ -39,6 +42,7 @@ public class TempoPlannedDetailRow {
         this.employee = employee;
         this.issueKey = issueKey;
         this.issueSummary = issueSummary;
+        this.epicKey = epicKey;
         this.plannedSeconds = plannedSeconds;
         this.statusAtSprintStart = statusAtSprintStart;
         this.statusAtSprintEnd = statusAtSprintEnd;

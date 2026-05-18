@@ -39,8 +39,12 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
 
     @org.springframework.beans.factory.annotation.Value("${jira.project-key}")
     private String projectKey;
+    @org.springframework.beans.factory.annotation.Value("${jira.project-key2:}")
+    private String projectKey2;
     @org.springframework.beans.factory.annotation.Value("${jira.sprintFieldId}")
     private String sprintFieldId;
+    @org.springframework.beans.factory.annotation.Value("${jira.epicLinkFieldId}")
+    private String epicLinkFieldId;
     @org.springframework.beans.factory.annotation.Value("#{'${jira.tempo-planned.excluded-summary-phrases:дежурство;передача версии}'.split(';')}")
     private List<String> excludedSummaryPhrasesConfig;
 
@@ -107,7 +111,7 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
 
         // 3) build raw planned records (employee/issue/date/seconds)
         List<PlannedRec> planned = allocations.stream()
-                .filter(a -> a.getPlanItem().getKey().toUpperCase().contains(projectKey) )
+                .filter(this::matchesProjectKey)
                 .filter(a -> !containsExcludedSummaryPhrase(a, excludedSummaryPhrases))
                 .map(a -> toPlannedRec(a, byAssigneeKey))
                 .filter(Objects::nonNull)
@@ -182,7 +186,7 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
                 JiraIssueResponse full = issueCache.computeIfAbsent(issueKey, ik -> {
                     try {
                         // нужен changelog + status (status обычно в стандартных полях)
-                        return jiraClient.getIssue(ik, "changelog", "status,"+sprintFieldId);
+                        return jiraClient.getIssue(ik, "changelog", "status," + sprintFieldId + "," + epicLinkFieldId);
                     } catch (Exception ex) {
                         log.warn("Не смогли получить issue {}: {}", ik, ex.getMessage());
                         return null;
@@ -201,6 +205,7 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
                         .sprintName(sp.name())
                         .issueKey(issueKey)
                         .issueSummary(issueSummary.get(k))
+                        .epicKey(extractEpicKey(full))
                         .employee(employeeName.getOrDefault(k, ""))
                         .assigneeKey(k.assigneeKey())
                         .plannedSeconds(plannedSeconds/ 3600)
@@ -220,6 +225,24 @@ public class TempoSprintPlannedStatusExportServiceImpl implements TempoSprintPla
         plannedRepo.saveAll(toSave);
         log.info("Сохранено {}", toSave.size());
         return toSave.size();
+    }
+
+    private String extractEpicKey(JiraIssueResponse full) {
+        if (full == null || full.getFields() == null || !StringUtils.hasText(epicLinkFieldId)) {
+            return null;
+        }
+        Object epicValue = full.getFields().get(epicLinkFieldId);
+        return epicValue != null ? epicValue.toString() : null;
+    }
+
+    private boolean matchesProjectKey(TempoAllocationDto allocation) {
+        if (allocation == null || allocation.getPlanItem() == null || !StringUtils.hasText(allocation.getPlanItem().getKey())) {
+            return false;
+        }
+
+        String issueKey = allocation.getPlanItem().getKey().toUpperCase();
+        return issueKey.contains(projectKey)
+                || (StringUtils.hasText(projectKey2) && issueKey.contains(projectKey2));
     }
 
     private PlannedRec toPlannedRec(TempoAllocationDto a, Map<String, Employee> byAssigneeKey) {

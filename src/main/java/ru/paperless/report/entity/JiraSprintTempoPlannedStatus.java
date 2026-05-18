@@ -28,6 +28,9 @@ public class JiraSprintTempoPlannedStatus {
     @Column(name = "issue_summary")
     private String issueSummary;
 
+    @Column(name = "epic_key")
+    private String epicKey;
+
     @Column(name = "employee", nullable = false)
     private String employee;
 

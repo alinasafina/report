@@ -168,10 +168,11 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             h.createCell(1).setCellValue("Сотрудник");
             h.createCell(2).setCellValue("Номер задачи");
             h.createCell(3).setCellValue("Название задачи");
-            h.createCell(4).setCellValue("Запланировано, ч");
-            h.createCell(5).setCellValue("Статус на начало");
-            h.createCell(6).setCellValue("Статус на конец");
-            for (int i = 0; i < 7; i++) {
+            h.createCell(4).setCellValue("Эпик");
+            h.createCell(5).setCellValue("Запланировано, ч");
+            h.createCell(6).setCellValue("Статус на начало");
+            h.createCell(7).setCellValue("Статус на конец");
+            for (int i = 0; i < 8; i++) {
                 h.getCell(i).setCellStyle(headerStyle);
             }
 
@@ -181,34 +182,35 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                 x.createCell(1).setCellValue(nullSafe(row.getEmployee()));
                 x.createCell(2).setCellValue(nullSafe(row.getIssueKey()));
                 x.createCell(3).setCellValue(nullSafe(row.getIssueSummary()));
+                x.createCell(4).setCellValue(nullSafe(row.getEpicKey()));
                 if (row.getPlannedSeconds() != null) {
-                    x.createCell(4).setCellValue(row.getPlannedSeconds());
+                    x.createCell(5).setCellValue(row.getPlannedSeconds());
                 } else {
-                    x.createCell(4).setCellValue("");
+                    x.createCell(5).setCellValue("");
                 }
-                x.createCell(5).setCellValue(nullSafe(row.getStatusAtSprintStart()));
-                x.createCell(6).setCellValue(nullSafe(row.getStatusAtSprintEnd()));
+                x.createCell(6).setCellValue(nullSafe(row.getStatusAtSprintStart()));
+                x.createCell(7).setCellValue(nullSafe(row.getStatusAtSprintEnd()));
 
                 boolean isDone = StringUtils.hasText(row.getStatusAtSprintEnd())
                         && doneStatuses.contains(row.getStatusAtSprintEnd());
 
                 if (Boolean.TRUE.equals(row.getOutOfPlan()) && !isDone) {
-                    for (int i = 0; i < 7; i++) {
+                    for (int i = 0; i < 8; i++) {
                         x.getCell(i).setCellStyle(outOfPlanNotDoneStyle);
                     }
                 } else if (Boolean.TRUE.equals(row.getOutOfPlan())) {
-                    for (int i = 0; i < 7; i++) {
+                    for (int i = 0; i < 8; i++) {
                         x.getCell(i).setCellStyle(outOfPlanStyle);
                     }
                 } else if (!isDone) {
-                    for (int i = 0; i < 7; i++) {
+                    for (int i = 0; i < 8; i++) {
                         x.getCell(i).setCellStyle(notDoneStyle);
                     }
                 }
             }
 
-            s1.setAutoFilter(new CellRangeAddress(h.getRowNum(), h.getRowNum(), 0, 6));
-            for (int i = 0; i < 7; i++) s1.autoSizeColumn(i);
+            s1.setAutoFilter(new CellRangeAddress(h.getRowNum(), h.getRowNum(), 0, 7));
+            for (int i = 0; i < 8; i++) s1.autoSizeColumn(i);
             s1.setColumnWidth(1, 35 * 256);
             s1.setColumnWidth(3, 65 * 256);
 
@@ -290,6 +292,7 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                     task.getEmployee(),
                     task.getIssueKey(),
                     task.getIssueSummary(),
+                    null,
                     null,
                     task.getStatusAtSprintStart(),
                     task.getStatusAtSprintEnd(),
