@@ -1,8 +1,9 @@
 package ru.paperless.report.service;
 
 import lombok.RequiredArgsConstructor;
-import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -72,6 +73,18 @@ public class ExcelTransitionLeadTimeReportServiceImpl implements ExcelTransition
             CellStyle headerStyle = wb.createCellStyle();
             headerStyle.setFont(boldFont);
 
+            Font orangeFont = wb.createFont();
+            orangeFont.setColor(IndexedColors.ORANGE.getIndex());
+
+            CellStyle orangeTextStyle = wb.createCellStyle();
+            orangeTextStyle.setFont(orangeFont);
+
+            Font redFont = wb.createFont();
+            redFont.setColor(IndexedColors.RED.getIndex());
+
+            CellStyle redTextStyle = wb.createCellStyle();
+            redTextStyle.setFont(redFont);
+
             Sheet summarySheet = wb.createSheet("3.1 Спринты до Протестировано");
             int summaryRowNum = writeMeta(summarySheet, filter, statusNames);
 
@@ -98,8 +111,22 @@ public class ExcelTransitionLeadTimeReportServiceImpl implements ExcelTransition
                 x.createCell(5).setCellValue(formatDate(row.getStartDate()));
                 x.createCell(6).setCellValue(formatDate(row.getEndDate()));
                 x.createCell(7).setCellValue(row.getReopenedCount() == null ? 0 : row.getReopenedCount());
-                x.createCell(8).setCellValue(row.getReopenedFromReviewCount() == null ? 0 : row.getReopenedFromReviewCount());
-                x.createCell(9).setCellValue(row.getSprintCount() == null ? 0 : row.getSprintCount());
+                long reopenedFromReviewCount = row.getReopenedFromReviewCount() == null ? 0 : row.getReopenedFromReviewCount();
+                x.createCell(8).setCellValue(reopenedFromReviewCount);
+                long sprintCount = row.getSprintCount() == null ? 0 : row.getSprintCount();
+                x.createCell(9).setCellValue(sprintCount);
+
+                if (reopenedFromReviewCount >= 5) {
+                    x.getCell(8).setCellStyle(redTextStyle);
+                } else if (reopenedFromReviewCount >= 3) {
+                    x.getCell(8).setCellStyle(orangeTextStyle);
+                }
+
+                if (sprintCount >= 5) {
+                    x.getCell(9).setCellStyle(redTextStyle);
+                } else if (sprintCount >= 3) {
+                    x.getCell(9).setCellStyle(orangeTextStyle);
+                }
             }
 
             summarySheet.setAutoFilter(new CellRangeAddress(summaryHeader.getRowNum(), summaryHeader.getRowNum(), 0, 9));
