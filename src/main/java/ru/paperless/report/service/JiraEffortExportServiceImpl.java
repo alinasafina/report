@@ -103,7 +103,7 @@ public class JiraEffortExportServiceImpl implements JiraEffortExportService {
                 if (!allowByPeopleFilter(assigneeFast, developerFast, employeeFilter)) continue;
 
                 // heavy issue: changelog + actualSprint + assignee + dev + estimate + worklog
-                String fieldsParam = String.join(",", "assignee", sprintFieldId, developerFieldId, estimateFieldId, epicLinkFieldId, "worklog", "summary");
+                String fieldsParam = String.join(",", "assignee", sprintFieldId, developerFieldId, estimateFieldId, epicLinkFieldId, "worklog", "summary", "labels");
                 JiraIssueResponse full = getIssueWithRetry(key, fieldsParam);
 
 
@@ -144,12 +144,14 @@ public class JiraEffortExportServiceImpl implements JiraEffortExportService {
                             .sprintLastLoggedId(st.actualSprint != null ? st.actualSprint.getId() : null)
                             .sprintLastLoggedName(st.actualSprint != null ? st.actualSprint.getName() : null)
                             .issueKey(full.getKey())
+                            .issueSummary(extractIssueSummary(full))
                             .assignee(assignee)
                             .developer(developer)
                             .employee(employee)
                             .firstEstimateHours(firstEstimateHours)
                             .loggedHours(logged)
                             .epicKey(full.getFields().get(epicLinkFieldId) != null ? full.getFields().get(epicLinkFieldId).toString() : null)
+                            .labels(extractLabels(full))
                             .build();
 
                     toSave.add(row);
@@ -178,6 +180,30 @@ public class JiraEffortExportServiceImpl implements JiraEffortExportService {
             }
         }
         return false;
+    }
+
+    private String extractIssueSummary(JiraIssueResponse full) {
+        if (full == null || full.getFields() == null) {
+            return null;
+        }
+        Object summary = full.getFields().get("summary");
+        return summary != null ? summary.toString() : null;
+    }
+
+    private String extractLabels(JiraIssueResponse full) {
+        if (full == null || full.getFields() == null) {
+            return null;
+        }
+        Object labelsValue = full.getFields().get("labels");
+        if (labelsValue instanceof List<?> labelsList) {
+            return labelsList.stream()
+                    .filter(Objects::nonNull)
+                    .map(Object::toString)
+                    .map(String::trim)
+                    .filter(StringUtils::hasText)
+                    .collect(Collectors.joining(";"));
+        }
+        return null;
     }
 
     /**

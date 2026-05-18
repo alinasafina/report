@@ -21,6 +21,7 @@ public class JiraSprintEmployeeEffort {
     private String sprintLastLoggedName;
 
     private String issueKey;
+    private String issueSummary;
     private String assignee;
     private String developer;
 
@@ -29,4 +30,5 @@ public class JiraSprintEmployeeEffort {
     private Double firstEstimateHours;
     private Double loggedHours;
     private String epicKey;
+    private String labels;
 }

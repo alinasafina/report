@@ -135,4 +135,15 @@
                  stripComments="true"
         />
     </changeSet>
+
+    <changeSet author="codex" id="jira_sprint_employee_effort_issue_summary_labels">
+        <sqlFile dbms="postgresql"
+                 path="scripts/jira_sprint_employee_effort_issue_summary_labels.sql"
+                 encoding="UTF-8"
+                 endDelimiter="/"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"
+        />
+    </changeSet>
 </databaseChangeLog>

@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import ru.paperless.report.service.ExcelEffortReportService;
 import ru.paperless.report.service.ExcelPlanningExport;
 import ru.paperless.report.service.ExcelStatusTransitionReportService;
+import ru.paperless.report.service.ExcelTechDebtQuotaReportService;
 import ru.paperless.report.service.ExcelTransitionLeadTimeReportService;
 
 import java.time.LocalDate;
@@ -23,6 +24,7 @@ public class ExcelController {
     private final ExcelEffortReportService effortReportService;
     private final ExcelPlanningExport planningExport;
     private final ExcelTransitionLeadTimeReportService transitionLeadTimeReportService;
+    private final ExcelTechDebtQuotaReportService techDebtQuotaReportService;
 
     @GetMapping("Возвраты задач")
     public ResponseEntity<byte[]> transitionsReport(
@@ -123,6 +125,21 @@ public class ExcelController {
         List<Long> targetStatusIds = List.of(10000L);
 
         byte[] file = transitionLeadTimeReportService.buildXlsx(startStatusIds, targetStatusIds, sprintIds);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(baseName + ".xlsx")
+                        .build().toString())
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(file);
+    }
+
+    @GetMapping("Квота backend techdebt")
+    public ResponseEntity<byte[]> techDebtQuotaReport(@RequestParam(name = "sprintIds") String sprintIds) {
+        String baseName = "backend_techdebt_quota_" + LocalDate.now();
+
+        byte[] file = techDebtQuotaReportService.buildXlsx(sprintIds);
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
