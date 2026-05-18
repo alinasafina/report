@@ -473,6 +473,20 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
              and m.transition_date >= b.start_date
              and m.transition_date <= b.end_date
             group by b.employee, b.issue_key
+        ),
+        reopened_counts as (
+            select
+                b.employee,
+                b.issue_key,
+                count(*) as reopened_count
+            from boundaries b
+            join matched m
+              on m.employee = b.employee
+             and m.issue_key = b.issue_key
+             and m.transition_date >= b.start_date
+             and m.transition_date <= b.end_date
+            where m.to_status_id = 4
+            group by b.employee, b.issue_key
         )
         select
             b.employee as employee,
@@ -484,11 +498,15 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
             er.end_sprint_name as endSprintName,
             b.start_date as startDate,
             b.end_date as endDate,
-            sc.sprint_count as sprintCount
+            sc.sprint_count as sprintCount,
+            coalesce(rc.reopened_count, 0) as reopenedCount
         from boundaries b
         join sprint_counts sc
           on sc.employee = b.employee
          and sc.issue_key = b.issue_key
+        left join reopened_counts rc
+          on rc.employee = b.employee
+         and rc.issue_key = b.issue_key
         left join start_rows sr
           on sr.employee = b.employee
          and sr.issue_key = b.issue_key

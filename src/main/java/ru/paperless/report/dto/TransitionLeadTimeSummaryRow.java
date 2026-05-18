@@ -22,4 +22,6 @@ public interface TransitionLeadTimeSummaryRow {
     Instant getEndDate();
 
     Long getSprintCount();
+
+    Long getReopenedCount();
 }

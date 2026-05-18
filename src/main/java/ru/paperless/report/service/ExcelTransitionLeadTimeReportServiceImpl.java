@@ -83,8 +83,9 @@ public class ExcelTransitionLeadTimeReportServiceImpl implements ExcelTransition
             summaryHeader.createCell(4).setCellValue("Последний спринт");
             summaryHeader.createCell(5).setCellValue("Дата первого Open");
             summaryHeader.createCell(6).setCellValue("Дата последнего перехода в Протестировано");
-            summaryHeader.createCell(7).setCellValue("Количество спринтов");
-            applyHeaderStyle(summaryHeader, headerStyle, 8);
+            summaryHeader.createCell(7).setCellValue("Количество переоткрытий");
+            summaryHeader.createCell(8).setCellValue("Количество спринтов");
+            applyHeaderStyle(summaryHeader, headerStyle, 9);
 
             for (TransitionLeadTimeSummaryRow row : summaryRows) {
                 Row x = summarySheet.createRow(summaryRowNum++);
@@ -95,11 +96,12 @@ public class ExcelTransitionLeadTimeReportServiceImpl implements ExcelTransition
                 x.createCell(4).setCellValue(nullSafe(row.getEndSprintName()));
                 x.createCell(5).setCellValue(formatDate(row.getStartDate()));
                 x.createCell(6).setCellValue(formatDate(row.getEndDate()));
-                x.createCell(7).setCellValue(row.getSprintCount() == null ? 0 : row.getSprintCount());
+                x.createCell(7).setCellValue(row.getReopenedCount() == null ? 0 : row.getReopenedCount());
+                x.createCell(8).setCellValue(row.getSprintCount() == null ? 0 : row.getSprintCount());
             }
 
-            summarySheet.setAutoFilter(new CellRangeAddress(summaryHeader.getRowNum(), summaryHeader.getRowNum(), 0, 7));
-            autoSizeColumns(summarySheet, 8);
+            summarySheet.setAutoFilter(new CellRangeAddress(summaryHeader.getRowNum(), summaryHeader.getRowNum(), 0, 8));
+            autoSizeColumns(summarySheet, 9);
             summarySheet.setColumnWidth(0, 35 * 256);
             summarySheet.setColumnWidth(2, 60 * 256);
 
