@@ -78,8 +78,8 @@ public class ExcelController {
         String baseName = "planning_" + LocalDate.now();
 
         //Разработка
-        List<String> doneStatus = List.of("Решена", "Тестирование", "Closed", "Tested");
-        List<String> notClosed = List.of("В разработке", "Ожидает", "Открыта (Open)", "In Progress", "Reopened", "Open", "In Review");
+        List<String> doneStatus = List.of("Решена", "Тестирование", "Closed", "Tested", "Ожидает");
+        List<String> notClosed = List.of("В разработке", "Открыта (Open)", "In Progress", "Reopened", "Open", "In Review");
         //Аналитика
         /*List<String> doneStatus = List.of("Решена", "Тестирование", "Closed", "In Review", "Tested",
                 "Закрыта", "Готово к разработке", "Разработка", "Грумминг пройден", "Выпущена");
