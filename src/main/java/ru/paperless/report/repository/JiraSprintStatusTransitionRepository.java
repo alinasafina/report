@@ -160,6 +160,100 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
     );
 
     @Query(value = """
+    with matched as (
+        select
+            t.final_assignee as employee,
+            t.sprint_id as sprint_id,
+            t.sprint_name as sprint_name,
+            t.issue_key as issue_key,
+            coalesce(t.from_status_name, fs.status_name) as from_status_name,
+            count(*) as cnt
+        from jira_sprint_status_transition t
+        left join project_jira_status fs on fs.status_id = t.from_status_id
+        where t.final_assignee is not null
+          and t.final_assignee in (:employees)
+          and t.issue_key is not null
+          and (:useFrom = false or t.from_status_id in (:fromStatusIds))
+          and (:useTo   = false or t.to_status_id   in (:toStatusIds))
+          and t.transition_date >= :periodStart
+          and t.transition_date <= :periodEnd
+        group by t.final_assignee, t.sprint_id, t.sprint_name, t.issue_key, coalesce(t.from_status_name, fs.status_name)
+
+        union all
+
+        select
+            t.developer as employee,
+            t.sprint_id as sprint_id,
+            t.sprint_name as sprint_name,
+            t.issue_key as issue_key,
+            coalesce(t.from_status_name, fs.status_name) as from_status_name,
+            count(*) as cnt
+        from jira_sprint_status_transition t
+        left join project_jira_status fs on fs.status_id = t.from_status_id
+        where t.developer is not null
+          and t.developer in (:employees)
+          and t.issue_key is not null
+          and (:useFrom = false or t.from_status_id in (:fromStatusIds))
+          and (:useTo   = false or t.to_status_id   in (:toStatusIds))
+          and t.transition_date >= :periodStart
+          and t.transition_date <= :periodEnd
+          and (t.final_assignee is null or t.developer <> t.final_assignee)
+        group by t.developer, t.sprint_id, t.sprint_name, t.issue_key, coalesce(t.from_status_name, fs.status_name)
+    )
+    select
+        employee as employee,
+        null as sprintId,
+        null as sprintName,
+        issue_key as issueKey,
+        from_status_name as fromStatusName,
+        sum(cnt) as transitionsCount
+    from matched
+    group by employee, issue_key, from_status_name
+    order by employee, issue_key, from_status_name
+    """, nativeQuery = true)
+    List<TransitionTaskReportRow> getTaskReportByPeriod(
+            @Param("employees") List<String> employees,
+            @Param("useFrom") boolean useFrom,
+            @Param("fromStatusIds") List<Long> fromStatusIds,
+            @Param("useTo") boolean useTo,
+            @Param("toStatusIds") List<Long> toStatusIds,
+            @Param("periodStart") java.time.OffsetDateTime periodStart,
+            @Param("periodEnd") java.time.OffsetDateTime periodEnd
+    );
+
+    @Query(value = """
+        select
+            t.issue_key as issueKey,
+            t.sprint_id as sprintId,
+            t.sprint_name as sprintName,
+            fs.status_name as fromStatusName,
+            ts.status_name as toStatusName,
+            t.developer as developer,
+            t.transition_date as transitionDate
+        from jira_sprint_status_transition t
+        left join project_jira_status fs on fs.status_id = t.from_status_id
+        left join project_jira_status ts on ts.status_id = t.to_status_id
+        where
+            ( (t.final_assignee is not null and t.final_assignee in (:employees))
+              or
+              (t.developer is not null and t.developer in (:employees)) )
+          and (:useFrom = false or t.from_status_id in (:fromStatusIds))
+          and (:useTo   = false or t.to_status_id   in (:toStatusIds))
+          and t.transition_date >= :periodStart
+          and t.transition_date <= :periodEnd
+        order by t.transition_date desc nulls last, t.issue_key
+        """, nativeQuery = true)
+    List<TransitionDetailRow> getDetailsByPeriod(
+            @Param("employees") List<String> employees,
+            @Param("useFrom") boolean useFrom,
+            @Param("fromStatusIds") List<Long> fromStatusIds,
+            @Param("useTo") boolean useTo,
+            @Param("toStatusIds") List<Long> toStatusIds,
+            @Param("periodStart") java.time.OffsetDateTime periodStart,
+            @Param("periodEnd") java.time.OffsetDateTime periodEnd
+    );
+
+    @Query(value = """
         with matched as (
             select
                 t.sprint_id as sprint_id,

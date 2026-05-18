@@ -15,12 +15,17 @@ import ru.paperless.report.dto.TransitionReportRow;
 import ru.paperless.report.dto.TransitionTaskReportRow;
 import ru.paperless.report.entity.Employee;
 import ru.paperless.report.entity.ProjectJiraStatus;
+import ru.paperless.report.entity.ProjectJiraSprint;
 import ru.paperless.report.repository.EmployeeRepository;
 import ru.paperless.report.repository.JiraSprintStatusTransitionRepository;
+import ru.paperless.report.repository.ProjectJiraSprintRepository;
 import ru.paperless.report.repository.ProjectJiraStatusRepository;
 
 import java.io.ByteArrayOutputStream;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
@@ -36,6 +41,7 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
 
     private final JiraSprintStatusTransitionRepository reportRepository;
     private final EmployeeRepository employeeRepo;
+    private final ProjectJiraSprintRepository sprintRepository;
     private final ProjectJiraStatusRepository projectJiraStatusRepository;
 
     private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
@@ -71,15 +77,31 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
                 sprintFilter.useTo(), sprintFilter.safeToIds(), sprintFilter.useSprints(), sprintFilter.safeSprintIds()
         );
 
-        List<TransitionTaskReportRow> taskSummaryRows = reportRepository.getTaskReportByStatusLists(
-                taskFilter.employees(), taskFilter.useFrom(), taskFilter.safeFromIds(),
-                taskFilter.useTo(), taskFilter.safeToIds(), taskFilter.useSprints(), taskFilter.safeSprintIds()
-        );
+        List<TransitionTaskReportRow> taskSummaryRows;
+        List<TransitionDetailRow> taskDetailRows;
 
-        List<TransitionDetailRow> taskDetailRows = reportRepository.getDetailsByStatusLists(
-                taskFilter.employees(), taskFilter.useFrom(), taskFilter.safeFromIds(),
-                taskFilter.useTo(), taskFilter.safeToIds(), taskFilter.useSprints(), taskFilter.safeSprintIds()
-        );
+        if (taskFilter.useSprints()) {
+            DateRange taskPeriod = resolveTaskPeriod(taskFilter.safeSprintIds());
+            taskSummaryRows = reportRepository.getTaskReportByPeriod(
+                    taskFilter.employees(), taskFilter.useFrom(), taskFilter.safeFromIds(),
+                    taskFilter.useTo(), taskFilter.safeToIds(), taskPeriod.start(), taskPeriod.end()
+            );
+
+            taskDetailRows = reportRepository.getDetailsByPeriod(
+                    taskFilter.employees(), taskFilter.useFrom(), taskFilter.safeFromIds(),
+                    taskFilter.useTo(), taskFilter.safeToIds(), taskPeriod.start(), taskPeriod.end()
+            );
+        } else {
+            taskDetailRows = reportRepository.getDetailsByStatusLists(
+                    taskFilter.employees(), taskFilter.useFrom(), taskFilter.safeFromIds(),
+                    taskFilter.useTo(), taskFilter.safeToIds(), taskFilter.useSprints(), taskFilter.safeSprintIds()
+            );
+
+            taskSummaryRows = reportRepository.getTaskReportByStatusLists(
+                    taskFilter.employees(), taskFilter.useFrom(), taskFilter.safeFromIds(),
+                    taskFilter.useTo(), taskFilter.safeToIds(), taskFilter.useSprints(), taskFilter.safeSprintIds()
+            );
+        }
 
         return toXlsxBytes(summaryRows, detailRows, sprintFilter, taskSummaryRows, taskDetailRows, taskFilter);
     }
@@ -152,23 +174,21 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
         int r = writeMeta(sheet, filter, statusNamesById);
 
         Row header = sheet.createRow(r++);
-        header.createCell(0).setCellValue("Спринт");
-        header.createCell(1).setCellValue("Сотрудник");
-        header.createCell(2).setCellValue("Номер задачи");
-        header.createCell(3).setCellValue("Из статуса");
-        header.createCell(4).setCellValue("Количество возвратов");
-        applyHeaderStyle(header, headerStyle, 5);
+        header.createCell(0).setCellValue("Сотрудник");
+        header.createCell(1).setCellValue("Номер задачи");
+        header.createCell(2).setCellValue("Из статуса");
+        header.createCell(3).setCellValue("Количество возвратов");
+        applyHeaderStyle(header, headerStyle, 4);
 
         for (TransitionTaskReportRow row : summaryRows) {
             Row x = sheet.createRow(r++);
-            x.createCell(0).setCellValue(nullSafe(row.getSprintName()));
-            x.createCell(1).setCellValue(nullSafe(row.getEmployee()));
-            x.createCell(2).setCellValue(nullSafe(row.getIssueKey()));
-            x.createCell(3).setCellValue(nullSafe(row.getFromStatusName()));
-            x.createCell(4).setCellValue(row.getTransitionsCount() == null ? 0 : row.getTransitionsCount());
+            x.createCell(0).setCellValue(nullSafe(row.getEmployee()));
+            x.createCell(1).setCellValue(nullSafe(row.getIssueKey()));
+            x.createCell(2).setCellValue(nullSafe(row.getFromStatusName()));
+            x.createCell(3).setCellValue(row.getTransitionsCount() == null ? 0 : row.getTransitionsCount());
         }
 
-        autoSizeAndSetEmployeeWidth(sheet, 5);
+        autoSizeAndSetEmployeeWidth(sheet, 4);
 
         r++;
         writeDetailBlock(sheet, headerStyle, detailRows, r);
@@ -342,6 +362,41 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
             List<Long> toIdsOriginal,
             String sprintIdsTextOriginal
     ) {
+    }
+
+    private record DateRange(OffsetDateTime start, OffsetDateTime end) {
+    }
+
+    private DateRange resolveTaskPeriod(List<Long> sprintIds) {
+        List<ProjectJiraSprint> sprints = sprintRepository.findBySprintIds(sprintIds);
+        if (sprints.isEmpty()) {
+            throw new IllegalArgumentException("Не найдены спринты для расчета периода отчета по задачам");
+        }
+
+        LocalDate periodStartDate = sprints.stream()
+                .map(ProjectJiraSprint::getStartDate)
+                .filter(Objects::nonNull)
+                .min(LocalDate::compareTo)
+                .orElseThrow(() -> new IllegalArgumentException("У выбранных спринтов не заполнена дата начала"));
+
+        LocalDate periodEndDate = sprints.stream()
+                .map(this::resolveSprintEndDate)
+                .filter(Objects::nonNull)
+                .max(LocalDate::compareTo)
+                .orElseThrow(() -> new IllegalArgumentException("У выбранных спринтов не заполнена дата окончания"));
+
+        ZoneId zoneId = ZoneId.systemDefault();
+        return new DateRange(
+                periodStartDate.atStartOfDay(zoneId).toOffsetDateTime(),
+                periodEndDate.atTime(LocalTime.MAX).atZone(zoneId).toOffsetDateTime()
+        );
+    }
+
+    private LocalDate resolveSprintEndDate(ProjectJiraSprint sprint) {
+        if (sprint.getEndDate() != null) {
+            return sprint.getEndDate();
+        }
+        return sprint.getCompleteDate();
     }
 
     private List<String> getDevelopers() {
