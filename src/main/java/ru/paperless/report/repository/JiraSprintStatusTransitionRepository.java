@@ -492,6 +492,21 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
              and m.transition_date <= b.end_date
             where m.to_status_id = 4
             group by b.employee, b.issue_key
+        ),
+        reopened_from_review_counts as (
+            select
+                b.employee,
+                b.issue_key,
+                count(*) as reopened_from_review_count
+            from boundaries b
+            join matched m
+              on m.employee = b.employee
+             and m.issue_key = b.issue_key
+             and m.transition_date >= b.start_date
+             and m.transition_date <= b.end_date
+            where m.to_status_id = 4
+              and lower(coalesce(m.from_status_name, '')) like '%review%'
+            group by b.employee, b.issue_key
         )
         select
             b.employee as employee,
@@ -504,7 +519,8 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
             b.start_date as startDate,
             b.end_date as endDate,
             sc.sprint_count as sprintCount,
-            coalesce(rc.reopened_count, 0) as reopenedCount
+            coalesce(rc.reopened_count, 0) as reopenedCount,
+            coalesce(rfrc.reopened_from_review_count, 0) as reopenedFromReviewCount
         from boundaries b
         join sprint_counts sc
           on sc.employee = b.employee
@@ -512,6 +528,9 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
         left join reopened_counts rc
           on rc.employee = b.employee
          and rc.issue_key = b.issue_key
+        left join reopened_from_review_counts rfrc
+          on rfrc.employee = b.employee
+         and rfrc.issue_key = b.issue_key
         left join start_rows sr
           on sr.employee = b.employee
          and sr.issue_key = b.issue_key
