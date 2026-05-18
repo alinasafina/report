@@ -58,7 +58,7 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             headerStyle.setFont(boldFont);
 
             // ===================== Sheet 1: Summary =====================
-            Sheet s1 = wb.createSheet("3.2 Соотвествия оценке по спринтам");
+            Sheet s1 = wb.createSheet("4.2 Соотвествия оценке по спринтам");
             int r1 = 0;
 
             Row h1 = s1.createRow(r1++);
@@ -88,7 +88,7 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             for (int i = 0; i <= 6; i++) s1.autoSizeColumn(i);
 
             // ===================== Sheet 2: Details =====================
-            Sheet s2 = wb.createSheet("3.3 Соответсвия оценке по задачам");
+            Sheet s2 = wb.createSheet("4.3 Соответсвия оценке по задачам");
             int r2 = 0;
 
             Row h2 = s2.createRow(r2++);
@@ -135,7 +135,7 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             for (int i = 0; i <= 7; i++) s2.autoSizeColumn(i);
 
             // ===================== Sheet 3: Info =====================
-            Sheet s3 = wb.createSheet("3.1 Соответсвие оценке по сотрудникам");
+            Sheet s3 = wb.createSheet("4.1 Соответсвие оценке по сотрудникам");
             int r3 = 0;
 
             Row t1 = s3.createRow(r3++);

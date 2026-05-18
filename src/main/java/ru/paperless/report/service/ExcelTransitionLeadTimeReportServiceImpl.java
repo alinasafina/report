@@ -72,7 +72,7 @@ public class ExcelTransitionLeadTimeReportServiceImpl implements ExcelTransition
             CellStyle headerStyle = wb.createCellStyle();
             headerStyle.setFont(boldFont);
 
-            Sheet summarySheet = wb.createSheet("1.1 Спринты до Протестировано");
+            Sheet summarySheet = wb.createSheet("3.1 Спринты до Протестировано");
             int summaryRowNum = writeMeta(summarySheet, filter, statusNames);
 
             Row summaryHeader = summarySheet.createRow(summaryRowNum++);
@@ -105,7 +105,7 @@ public class ExcelTransitionLeadTimeReportServiceImpl implements ExcelTransition
             summarySheet.setColumnWidth(0, 35 * 256);
             summarySheet.setColumnWidth(2, 60 * 256);
 
-            Sheet detailSheet = wb.createSheet("1.2 Переходы задач");
+            Sheet detailSheet = wb.createSheet("3.2 Переходы задач");
             int detailRowNum = writeMeta(detailSheet, filter, statusNames);
 
             Row detailHeader = detailSheet.createRow(detailRowNum++);
