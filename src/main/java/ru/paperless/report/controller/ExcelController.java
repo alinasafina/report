@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import ru.paperless.report.service.ExcelEffortReportService;
 import ru.paperless.report.service.ExcelPlanningExport;
 import ru.paperless.report.service.ExcelStatusTransitionReportService;
+import ru.paperless.report.service.ExcelTransitionLeadTimeReportService;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -21,6 +22,7 @@ public class ExcelController {
     private final ExcelStatusTransitionReportService transitionReportService;
     private final ExcelEffortReportService effortReportService;
     private final ExcelPlanningExport planningExport;
+    private final ExcelTransitionLeadTimeReportService transitionLeadTimeReportService;
 
     @GetMapping("Возвраты задач")
     public ResponseEntity<byte[]> transitionsReport(
@@ -109,5 +111,25 @@ public class ExcelController {
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(file);
 
+    }
+
+    @GetMapping("Спринты до Протестировано")
+    public ResponseEntity<byte[]> transitionLeadTimeReport(
+            @RequestParam(name = "sprintIds", required = false) String sprintIds
+    ) {
+        String baseName = "tested_lead_time_" + LocalDate.now();
+
+        List<Long> startStatusIds = List.of(1L);
+        List<Long> targetStatusIds = List.of(10000L);
+
+        byte[] file = transitionLeadTimeReportService.buildXlsx(startStatusIds, targetStatusIds, sprintIds);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(baseName + ".xlsx")
+                        .build().toString())
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(file);
     }
 }

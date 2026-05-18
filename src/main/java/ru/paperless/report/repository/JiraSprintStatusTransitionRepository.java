@@ -5,6 +5,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import ru.paperless.report.dto.OutOfPlanTaskProjection;
 import ru.paperless.report.dto.TransitionDetailRow;
+import ru.paperless.report.dto.TransitionLeadTimeDetailRow;
+import ru.paperless.report.dto.TransitionLeadTimeSummaryRow;
 import ru.paperless.report.dto.TransitionReportRow;
 import ru.paperless.report.dto.TransitionTaskReportRow;
 import ru.paperless.report.entity.JiraSprintStatusTransition;
@@ -345,6 +347,268 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
         """, nativeQuery = true)
     List<OutOfPlanTaskProjection> getLatestTasksForPlanning(
             @Param("employees") List<String> employees,
+            @Param("useSprints") boolean useSprints,
+            @Param("sprintIds") List<Long> sprintIds
+    );
+
+    @Query(value = """
+        with matched as (
+            select
+                t.id as id,
+                t.final_assignee as employee,
+                t.sprint_id as sprint_id,
+                t.sprint_name as sprint_name,
+                t.issue_key as issue_key,
+                t.issue_summary as issue_summary,
+                t.from_status_id as from_status_id,
+                coalesce(t.from_status_name, fs.status_name) as from_status_name,
+                t.to_status_id as to_status_id,
+                coalesce(t.to_status_name, ts.status_name) as to_status_name,
+                t.transition_date as transition_date
+            from jira_sprint_status_transition t
+            left join project_jira_status fs on fs.status_id = t.from_status_id
+            left join project_jira_status ts on ts.status_id = t.to_status_id
+            where t.final_assignee is not null
+              and t.final_assignee in (:employees)
+              and t.issue_key is not null
+              and (:useSprints = false or t.sprint_id in (:sprintIds))
+
+            union all
+
+            select
+                t.id as id,
+                t.developer as employee,
+                t.sprint_id as sprint_id,
+                t.sprint_name as sprint_name,
+                t.issue_key as issue_key,
+                t.issue_summary as issue_summary,
+                t.from_status_id as from_status_id,
+                coalesce(t.from_status_name, fs.status_name) as from_status_name,
+                t.to_status_id as to_status_id,
+                coalesce(t.to_status_name, ts.status_name) as to_status_name,
+                t.transition_date as transition_date
+            from jira_sprint_status_transition t
+            left join project_jira_status fs on fs.status_id = t.from_status_id
+            left join project_jira_status ts on ts.status_id = t.to_status_id
+            where t.developer is not null
+              and t.developer in (:employees)
+              and t.issue_key is not null
+              and (:useSprints = false or t.sprint_id in (:sprintIds))
+              and (t.final_assignee is null or t.developer <> t.final_assignee)
+        ),
+        first_open as (
+            select
+                employee,
+                issue_key,
+                min(transition_date) as start_date
+            from matched
+            where (:useStart = false or from_status_id in (:startStatusIds) or to_status_id in (:startStatusIds))
+            group by employee, issue_key
+        ),
+        last_target as (
+            select
+                m.employee,
+                m.issue_key,
+                max(m.transition_date) as end_date
+            from matched m
+            join first_open fo
+              on fo.employee = m.employee
+             and fo.issue_key = m.issue_key
+            where (:useTarget = false or m.to_status_id in (:targetStatusIds))
+              and m.transition_date >= fo.start_date
+            group by m.employee, m.issue_key
+        ),
+        boundaries as (
+            select
+                fo.employee,
+                fo.issue_key,
+                fo.start_date,
+                lt.end_date
+            from first_open fo
+            join last_target lt
+              on lt.employee = fo.employee
+             and lt.issue_key = fo.issue_key
+            where lt.end_date >= fo.start_date
+        ),
+        start_rows as (
+            select distinct on (b.employee, b.issue_key)
+                b.employee as employee,
+                b.issue_key as issue_key,
+                m.issue_summary as issue_summary,
+                m.sprint_id as start_sprint_id,
+                m.sprint_name as start_sprint_name,
+                b.start_date as start_date
+            from boundaries b
+            join matched m
+              on m.employee = b.employee
+             and m.issue_key = b.issue_key
+             and m.transition_date = b.start_date
+            order by b.employee, b.issue_key, m.id
+        ),
+        end_rows as (
+            select distinct on (b.employee, b.issue_key)
+                b.employee as employee,
+                b.issue_key as issue_key,
+                m.issue_summary as issue_summary,
+                m.sprint_id as end_sprint_id,
+                m.sprint_name as end_sprint_name,
+                b.end_date as end_date
+            from boundaries b
+            join matched m
+              on m.employee = b.employee
+             and m.issue_key = b.issue_key
+             and m.transition_date = b.end_date
+            where (:useTarget = false or m.to_status_id in (:targetStatusIds))
+            order by b.employee, b.issue_key, m.id desc
+        ),
+        sprint_counts as (
+            select
+                b.employee,
+                b.issue_key,
+                count(distinct m.sprint_id) as sprint_count
+            from boundaries b
+            join matched m
+              on m.employee = b.employee
+             and m.issue_key = b.issue_key
+             and m.transition_date >= b.start_date
+             and m.transition_date <= b.end_date
+            group by b.employee, b.issue_key
+        )
+        select
+            b.employee as employee,
+            b.issue_key as issueKey,
+            coalesce(er.issue_summary, sr.issue_summary) as issueSummary,
+            sr.start_sprint_id as startSprintId,
+            sr.start_sprint_name as startSprintName,
+            er.end_sprint_id as endSprintId,
+            er.end_sprint_name as endSprintName,
+            b.start_date as startDate,
+            b.end_date as endDate,
+            sc.sprint_count as sprintCount
+        from boundaries b
+        join sprint_counts sc
+          on sc.employee = b.employee
+         and sc.issue_key = b.issue_key
+        left join start_rows sr
+          on sr.employee = b.employee
+         and sr.issue_key = b.issue_key
+        left join end_rows er
+          on er.employee = b.employee
+         and er.issue_key = b.issue_key
+        order by b.employee, sc.sprint_count desc, b.issue_key
+        """, nativeQuery = true)
+    List<TransitionLeadTimeSummaryRow> getLeadTimeSummary(
+            @Param("employees") List<String> employees,
+            @Param("useStart") boolean useStart,
+            @Param("startStatusIds") List<Long> startStatusIds,
+            @Param("useTarget") boolean useTarget,
+            @Param("targetStatusIds") List<Long> targetStatusIds,
+            @Param("useSprints") boolean useSprints,
+            @Param("sprintIds") List<Long> sprintIds
+    );
+
+    @Query(value = """
+        with matched as (
+            select
+                t.id as id,
+                t.final_assignee as employee,
+                t.sprint_id as sprint_id,
+                t.sprint_name as sprint_name,
+                t.issue_key as issue_key,
+                t.issue_summary as issue_summary,
+                t.from_status_id as from_status_id,
+                coalesce(t.from_status_name, fs.status_name) as from_status_name,
+                t.to_status_id as to_status_id,
+                coalesce(t.to_status_name, ts.status_name) as to_status_name,
+                t.transition_date as transition_date
+            from jira_sprint_status_transition t
+            left join project_jira_status fs on fs.status_id = t.from_status_id
+            left join project_jira_status ts on ts.status_id = t.to_status_id
+            where t.final_assignee is not null
+              and t.final_assignee in (:employees)
+              and t.issue_key is not null
+              and (:useSprints = false or t.sprint_id in (:sprintIds))
+
+            union all
+
+            select
+                t.id as id,
+                t.developer as employee,
+                t.sprint_id as sprint_id,
+                t.sprint_name as sprint_name,
+                t.issue_key as issue_key,
+                t.issue_summary as issue_summary,
+                t.from_status_id as from_status_id,
+                coalesce(t.from_status_name, fs.status_name) as from_status_name,
+                t.to_status_id as to_status_id,
+                coalesce(t.to_status_name, ts.status_name) as to_status_name,
+                t.transition_date as transition_date
+            from jira_sprint_status_transition t
+            left join project_jira_status fs on fs.status_id = t.from_status_id
+            left join project_jira_status ts on ts.status_id = t.to_status_id
+            where t.developer is not null
+              and t.developer in (:employees)
+              and t.issue_key is not null
+              and (:useSprints = false or t.sprint_id in (:sprintIds))
+              and (t.final_assignee is null or t.developer <> t.final_assignee)
+        ),
+        first_open as (
+            select
+                employee,
+                issue_key,
+                min(transition_date) as start_date
+            from matched
+            where (:useStart = false or from_status_id in (:startStatusIds) or to_status_id in (:startStatusIds))
+            group by employee, issue_key
+        ),
+        last_target as (
+            select
+                m.employee,
+                m.issue_key,
+                max(m.transition_date) as end_date
+            from matched m
+            join first_open fo
+              on fo.employee = m.employee
+             and fo.issue_key = m.issue_key
+            where (:useTarget = false or m.to_status_id in (:targetStatusIds))
+              and m.transition_date >= fo.start_date
+            group by m.employee, m.issue_key
+        ),
+        boundaries as (
+            select
+                fo.employee,
+                fo.issue_key,
+                fo.start_date,
+                lt.end_date
+            from first_open fo
+            join last_target lt
+              on lt.employee = fo.employee
+             and lt.issue_key = fo.issue_key
+            where lt.end_date >= fo.start_date
+        )
+        select
+            m.employee as employee,
+            m.issue_key as issueKey,
+            m.issue_summary as issueSummary,
+            m.sprint_id as sprintId,
+            m.sprint_name as sprintName,
+            m.from_status_name as fromStatusName,
+            m.to_status_name as toStatusName,
+            m.transition_date as transitionDate
+        from matched m
+        join boundaries b
+          on b.employee = m.employee
+         and b.issue_key = m.issue_key
+         and m.transition_date >= b.start_date
+         and m.transition_date <= b.end_date
+        order by m.employee, m.issue_key, m.transition_date, m.id
+        """, nativeQuery = true)
+    List<TransitionLeadTimeDetailRow> getLeadTimeDetails(
+            @Param("employees") List<String> employees,
+            @Param("useStart") boolean useStart,
+            @Param("startStatusIds") List<Long> startStatusIds,
+            @Param("useTarget") boolean useTarget,
+            @Param("targetStatusIds") List<Long> targetStatusIds,
             @Param("useSprints") boolean useSprints,
             @Param("sprintIds") List<Long> sprintIds
     );
