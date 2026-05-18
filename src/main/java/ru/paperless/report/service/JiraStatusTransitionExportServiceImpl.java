@@ -35,6 +35,8 @@ public class JiraStatusTransitionExportServiceImpl implements JiraStatusTransiti
     private String developerFieldId;
     @org.springframework.beans.factory.annotation.Value("${jira.project-key}")
     private String projectKey;
+    @org.springframework.beans.factory.annotation.Value("${jira.project-key2:}")
+    private String projectKey2;
     @org.springframework.beans.factory.annotation.Value("${jira.epicLinkFieldId}")
     private String epicLinkFieldId;
 
@@ -52,7 +54,8 @@ public class JiraStatusTransitionExportServiceImpl implements JiraStatusTransiti
         }
 
         // 4) JQL
-        String jql = "project = " + projectKey + " AND Sprint in (" +
+        String projectsJql = buildProjectsJql();
+        String jql = projectsJql + " AND Sprint in (" +
                 sprintIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + ")";
         log.info("JQL: {}", jql);
 
@@ -129,7 +132,7 @@ public class JiraStatusTransitionExportServiceImpl implements JiraStatusTransiti
                         // сохраняем (sprint_id тут у issue может быть несколько — как в bash, пишем строкой имена)
                         // если тебе нужно сохранить именно sprint_id (и по одному на строку) — скажи, сделаю split.
                         JiraSprintStatusTransition row = JiraSprintStatusTransition.builder()
-                                .projectKey(projectKey)
+                                .projectKey(extractProjectKey(full.getKey()))
                                 .sprintId(sprintAtTransition != null ? sprintAtTransition.id() : null)
                                 .sprintName(sprintAtTransition != null ? sprintAtTransition.name() : null)
                                 .issueKey(full.getKey())
@@ -266,5 +269,25 @@ public class JiraStatusTransitionExportServiceImpl implements JiraStatusTransiti
         }
         Object epicValue = full.getFields().get(epicLinkFieldId);
         return epicValue != null ? epicValue.toString() : null;
+    }
+
+    private String buildProjectsJql() {
+        if (StringUtils.hasText(projectKey2)) {
+            return "project in (" + projectKey + "," + projectKey2 + ")";
+        }
+        return "project = " + projectKey;
+    }
+
+    private String extractProjectKey(String issueKey) {
+        if (!StringUtils.hasText(issueKey)) {
+            return projectKey;
+        }
+
+        int delimiterIndex = issueKey.indexOf('-');
+        if (delimiterIndex <= 0) {
+            return issueKey;
+        }
+
+        return issueKey.substring(0, delimiterIndex).trim().toUpperCase();
     }
 }
