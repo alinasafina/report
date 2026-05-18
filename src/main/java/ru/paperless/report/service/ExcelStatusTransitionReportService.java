@@ -4,6 +4,8 @@ import java.util.List;
 
 public interface ExcelStatusTransitionReportService {
     byte[] buildXlsx(List<Long> fromStatusIds,
-                            List<Long> toStatusIds,
-                            String sprintIdsText);
+                     List<Long> toStatusIds,
+                     List<Long> taskFromStatusIds,
+                     List<Long> taskToStatusIds,
+                     String sprintIdsText);
 }

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import ru.paperless.report.dto.TransitionDetailRow;
 import ru.paperless.report.dto.TransitionReportRow;
+import ru.paperless.report.dto.TransitionTaskReportRow;
 import ru.paperless.report.entity.Employee;
 import ru.paperless.report.entity.ProjectJiraStatus;
 import ru.paperless.report.repository.EmployeeRepository;
@@ -53,103 +54,183 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
      */
     public byte[] buildXlsx(List<Long> fromStatusIds,
                             List<Long> toStatusIds,
+                            List<Long> taskFromStatusIds,
+                            List<Long> taskToStatusIds,
                             String sprintIdsText) {
 
-        Filter f = prepareFilter(fromStatusIds, toStatusIds, getDevelopers(), sprintIdsText);
+        Filter sprintFilter = prepareFilter(fromStatusIds, toStatusIds, getDevelopers(), sprintIdsText);
+        Filter taskFilter = prepareFilter(taskFromStatusIds, taskToStatusIds, getDevelopers(), sprintIdsText);
 
         List<TransitionReportRow> summaryRows = reportRepository.getReportByStatusLists(
-                f.employees(), f.useFrom(), f.safeFromIds(), f.useTo(), f.safeToIds(), f.useSprints(), f.safeSprintIds()
+                sprintFilter.employees(), sprintFilter.useFrom(), sprintFilter.safeFromIds(),
+                sprintFilter.useTo(), sprintFilter.safeToIds(), sprintFilter.useSprints(), sprintFilter.safeSprintIds()
         );
 
         List<TransitionDetailRow> detailRows = reportRepository.getDetailsByStatusLists(
-                f.employees(), f.useFrom(), f.safeFromIds(), f.useTo(), f.safeToIds(), f.useSprints(), f.safeSprintIds()
+                sprintFilter.employees(), sprintFilter.useFrom(), sprintFilter.safeFromIds(),
+                sprintFilter.useTo(), sprintFilter.safeToIds(), sprintFilter.useSprints(), sprintFilter.safeSprintIds()
         );
 
-        return toXlsxBytes(summaryRows, detailRows, f);
+        List<TransitionTaskReportRow> taskSummaryRows = reportRepository.getTaskReportByStatusLists(
+                taskFilter.employees(), taskFilter.useFrom(), taskFilter.safeFromIds(),
+                taskFilter.useTo(), taskFilter.safeToIds(), taskFilter.useSprints(), taskFilter.safeSprintIds()
+        );
+
+        List<TransitionDetailRow> taskDetailRows = reportRepository.getDetailsByStatusLists(
+                taskFilter.employees(), taskFilter.useFrom(), taskFilter.safeFromIds(),
+                taskFilter.useTo(), taskFilter.safeToIds(), taskFilter.useSprints(), taskFilter.safeSprintIds()
+        );
+
+        return toXlsxBytes(summaryRows, detailRows, sprintFilter, taskSummaryRows, taskDetailRows, taskFilter);
     }
 
     private byte[] toXlsxBytes(List<TransitionReportRow> summaryRows,
                                List<TransitionDetailRow> detailRows,
-                               Filter f) {
+                               Filter sprintFilter,
+                               List<TransitionTaskReportRow> taskSummaryRows,
+                               List<TransitionDetailRow> taskDetailRows,
+                               Filter taskFilter) {
 
         try (Workbook wb = new XSSFWorkbook();
              ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-            Map<Long, String> statusNamesById = getStatusNamesById(f);
+            Map<Long, String> sprintStatusNamesById = getStatusNamesById(sprintFilter);
+            Map<Long, String> taskStatusNamesById = getStatusNamesById(taskFilter);
             Font boldFont = wb.createFont();
             boldFont.setBold(true);
 
             CellStyle headerStyle = wb.createCellStyle();
             headerStyle.setFont(boldFont);
 
-            Sheet sheet = wb.createSheet("2. Возвраты по задачам");
-            int r = 0;
-
-            Row m1 = sheet.createRow(r++);
-            m1.createCell(0).setCellValue("Из статуса");
-            m1.createCell(1).setCellValue(formatStatusListOrAll(f.fromIdsOriginal(), statusNamesById));
-
-            Row m2 = sheet.createRow(r++);
-            m2.createCell(0).setCellValue("В статус");
-            m2.createCell(1).setCellValue(formatStatusListOrAll(f.toIdsOriginal(), statusNamesById));
-
-            Row m3 = sheet.createRow(r++);
-            m3.createCell(0).setCellValue("Сотрудник");
-            m3.createCell(1).setCellValue(String.join(", ", f.employees()));
-
-            r++; // empty row
-
-            Row header = sheet.createRow(r++);
-            header.createCell(0).setCellValue("Спринт");
-            header.createCell(1).setCellValue("Сотрудник");
-            header.createCell(2).setCellValue("Из статуса");
-            header.createCell(3).setCellValue("Количество возвратов");
-            for (int i = 0; i < 4; i++) {
-                header.getCell(i).setCellStyle(headerStyle);
-            }
-
-            for (TransitionReportRow row : summaryRows) {
-                Row x = sheet.createRow(r++);
-                x.createCell(0).setCellValue(nullSafe(row.getSprintName()));
-                x.createCell(1).setCellValue(nullSafe(row.getEmployee()));
-                x.createCell(2).setCellValue(nullSafe(row.getFromStatusName()));
-                x.createCell(3).setCellValue(row.getTransitionsCount() == null ? 0 : row.getTransitionsCount());
-            }
-
-            for (int i = 0; i < 4; i++) sheet.autoSizeColumn(i);
-            sheet.setColumnWidth(1, 35 * 256);
-
-            r++;
-
-            Row dh = sheet.createRow(r++);
-            dh.createCell(0).setCellValue("Спринт");
-            dh.createCell(1).setCellValue("Сотрудник");
-            dh.createCell(2).setCellValue("Номер задачи");          // "название задачи" => issue_key
-            dh.createCell(3).setCellValue("Из статуса");
-            dh.createCell(4).setCellValue("В статус");
-            dh.createCell(5).setCellValue("Дата перехода");
-            for (int i = 0; i < 6; i++) {
-                dh.getCell(i).setCellStyle(headerStyle);
-            }
-
-            for (TransitionDetailRow row : detailRows) {
-                Row x = sheet.createRow(r++);
-                x.createCell(0).setCellValue(nullSafe(row.getSprintName()));
-                x.createCell(1).setCellValue(nullSafe(row.getDeveloper()));
-                x.createCell(2).setCellValue(nullSafe(row.getIssueKey()));
-                x.createCell(3).setCellValue(nullSafe(row.getFromStatusName()));
-                x.createCell(4).setCellValue(nullSafe(row.getToStatusName()));
-                x.createCell(5).setCellValue(formatDate(row.getTransitionDate()));
-            }
-
-            sheet.setAutoFilter(new CellRangeAddress(dh.getRowNum(), dh.getRowNum(), 0, 5));
-            for (int i = 0; i < 6; i++) sheet.autoSizeColumn(i);
-            sheet.setColumnWidth(1, 35 * 256);
+            buildSprintSheet(wb, headerStyle, summaryRows, detailRows, sprintFilter, sprintStatusNamesById);
+            buildTaskSheet(wb, headerStyle, taskSummaryRows, taskDetailRows, taskFilter, taskStatusNamesById);
 
             wb.write(baos);
             return baos.toByteArray();
         } catch (Exception e) {
             throw new RuntimeException("Не удалось сформировать XLSX", e);
         }
+    }
+
+    private void buildSprintSheet(Workbook wb,
+                                  CellStyle headerStyle,
+                                  List<TransitionReportRow> summaryRows,
+                                  List<TransitionDetailRow> detailRows,
+                                  Filter filter,
+                                  Map<Long, String> statusNamesById) {
+        Sheet sheet = wb.createSheet("2.1 Возвраты по спринтам");
+        int r = writeMeta(sheet, filter, statusNamesById);
+
+        Row header = sheet.createRow(r++);
+        header.createCell(0).setCellValue("Спринт");
+        header.createCell(1).setCellValue("Сотрудник");
+        header.createCell(2).setCellValue("Из статуса");
+        header.createCell(3).setCellValue("Количество возвратов");
+        applyHeaderStyle(header, headerStyle, 4);
+
+        for (TransitionReportRow row : summaryRows) {
+            Row x = sheet.createRow(r++);
+            x.createCell(0).setCellValue(nullSafe(row.getSprintName()));
+            x.createCell(1).setCellValue(nullSafe(row.getEmployee()));
+            x.createCell(2).setCellValue(nullSafe(row.getFromStatusName()));
+            x.createCell(3).setCellValue(row.getTransitionsCount() == null ? 0 : row.getTransitionsCount());
+        }
+
+        autoSizeAndSetEmployeeWidth(sheet, 4);
+
+        r++;
+        writeDetailBlock(sheet, headerStyle, detailRows, r);
+        autoSizeAndSetEmployeeWidth(sheet, 6);
+    }
+
+    private void buildTaskSheet(Workbook wb,
+                                CellStyle headerStyle,
+                                List<TransitionTaskReportRow> summaryRows,
+                                List<TransitionDetailRow> detailRows,
+                                Filter filter,
+                                Map<Long, String> statusNamesById) {
+        Sheet sheet = wb.createSheet("2.2 Возвраты по задачам");
+        int r = writeMeta(sheet, filter, statusNamesById);
+
+        Row header = sheet.createRow(r++);
+        header.createCell(0).setCellValue("Спринт");
+        header.createCell(1).setCellValue("Сотрудник");
+        header.createCell(2).setCellValue("Номер задачи");
+        header.createCell(3).setCellValue("Из статуса");
+        header.createCell(4).setCellValue("Количество возвратов");
+        applyHeaderStyle(header, headerStyle, 5);
+
+        for (TransitionTaskReportRow row : summaryRows) {
+            Row x = sheet.createRow(r++);
+            x.createCell(0).setCellValue(nullSafe(row.getSprintName()));
+            x.createCell(1).setCellValue(nullSafe(row.getEmployee()));
+            x.createCell(2).setCellValue(nullSafe(row.getIssueKey()));
+            x.createCell(3).setCellValue(nullSafe(row.getFromStatusName()));
+            x.createCell(4).setCellValue(row.getTransitionsCount() == null ? 0 : row.getTransitionsCount());
+        }
+
+        autoSizeAndSetEmployeeWidth(sheet, 5);
+
+        r++;
+        writeDetailBlock(sheet, headerStyle, detailRows, r);
+        autoSizeAndSetEmployeeWidth(sheet, 6);
+    }
+
+    private int writeMeta(Sheet sheet, Filter filter, Map<Long, String> statusNamesById) {
+        int r = 0;
+
+        Row m1 = sheet.createRow(r++);
+        m1.createCell(0).setCellValue("Из статуса");
+        m1.createCell(1).setCellValue(formatStatusListOrAll(filter.fromIdsOriginal(), statusNamesById));
+
+        Row m2 = sheet.createRow(r++);
+        m2.createCell(0).setCellValue("В статус");
+        m2.createCell(1).setCellValue(formatStatusListOrAll(filter.toIdsOriginal(), statusNamesById));
+
+        Row m3 = sheet.createRow(r++);
+        m3.createCell(0).setCellValue("Сотрудник");
+        m3.createCell(1).setCellValue(String.join(", ", filter.employees()));
+
+        return r + 1;
+    }
+
+    private void writeDetailBlock(Sheet sheet,
+                                  CellStyle headerStyle,
+                                  List<TransitionDetailRow> detailRows,
+                                  int startRow) {
+        int r = startRow;
+        Row dh = sheet.createRow(r++);
+        dh.createCell(0).setCellValue("Спринт");
+        dh.createCell(1).setCellValue("Сотрудник");
+        dh.createCell(2).setCellValue("Номер задачи");
+        dh.createCell(3).setCellValue("Из статуса");
+        dh.createCell(4).setCellValue("В статус");
+        dh.createCell(5).setCellValue("Дата перехода");
+        applyHeaderStyle(dh, headerStyle, 6);
+
+        for (TransitionDetailRow row : detailRows) {
+            Row x = sheet.createRow(r++);
+            x.createCell(0).setCellValue(nullSafe(row.getSprintName()));
+            x.createCell(1).setCellValue(nullSafe(row.getDeveloper()));
+            x.createCell(2).setCellValue(nullSafe(row.getIssueKey()));
+            x.createCell(3).setCellValue(nullSafe(row.getFromStatusName()));
+            x.createCell(4).setCellValue(nullSafe(row.getToStatusName()));
+            x.createCell(5).setCellValue(formatDate(row.getTransitionDate()));
+        }
+
+        sheet.setAutoFilter(new CellRangeAddress(dh.getRowNum(), dh.getRowNum(), 0, 5));
+    }
+
+    private void applyHeaderStyle(Row row, CellStyle headerStyle, int cellsCount) {
+        for (int i = 0; i < cellsCount; i++) {
+            row.getCell(i).setCellStyle(headerStyle);
+        }
+    }
+
+    private void autoSizeAndSetEmployeeWidth(Sheet sheet, int columnsCount) {
+        for (int i = 0; i < columnsCount; i++) {
+            sheet.autoSizeColumn(i);
+        }
+        sheet.setColumnWidth(1, 35 * 256);
     }
 
     // ---------- filter prep ----------

@@ -33,6 +33,10 @@ public class ExcelController {
         // Открыта (Open), Открыта заново (Reopened), В разработке
         List<Long> toStatusIds = List.of(1L, 4L, 10076L);
 
+        // Возвраты по задачам
+        List<Long> taskFromStatusIds = List.of(6L, 13336L, 10108L, 10000L, 13936L);
+        List<Long> taskToStatusIds = List.of(1L, 4L, 10076L);
+
         /*Аналитика*/
         // In Progress, In Review, Ожидает, Решена, Closed
         //List<Long> fromStatusIds = List.of(3L, 13336L, 10739L, 13936L, 6L);
@@ -45,7 +49,13 @@ public class ExcelController {
         // Открыта заново (Reopened)
         List<Long> toStatusIds = List.of(4L);*/
 
-        byte[] file = transitionReportService.buildXlsx(fromStatusIds, toStatusIds, sprintIds);
+        byte[] file = transitionReportService.buildXlsx(
+                fromStatusIds,
+                toStatusIds,
+                taskFromStatusIds,
+                taskToStatusIds,
+                sprintIds
+        );
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
