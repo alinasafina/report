@@ -23,6 +23,8 @@ public interface TransitionLeadTimeSummaryRow {
 
     Long getSprintCount();
 
+    Long getResolvedSprintCount();
+
     Long getReopenedCount();
 
     Long getReopenedFromReviewCount();

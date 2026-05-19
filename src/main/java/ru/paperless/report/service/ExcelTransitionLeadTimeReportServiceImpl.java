@@ -85,7 +85,7 @@ public class ExcelTransitionLeadTimeReportServiceImpl implements ExcelTransition
             CellStyle redTextStyle = wb.createCellStyle();
             redTextStyle.setFont(redFont);
 
-            Sheet summarySheet = wb.createSheet("3.1 Спринты до Протестировано");
+            Sheet summarySheet = wb.createSheet("3.1 Количество спринтов");
             int summaryRowNum = writeMeta(summarySheet, filter, statusNames);
 
             Row summaryHeader = summarySheet.createRow(summaryRowNum++);
@@ -98,8 +98,9 @@ public class ExcelTransitionLeadTimeReportServiceImpl implements ExcelTransition
             summaryHeader.createCell(6).setCellValue("Дата последнего перехода в Протестировано");
             summaryHeader.createCell(7).setCellValue("Количество переоткрытий");
             summaryHeader.createCell(8).setCellValue("Переоткрыто из Review");
-            summaryHeader.createCell(9).setCellValue("Количество спринтов");
-            applyHeaderStyle(summaryHeader, headerStyle, 10);
+            summaryHeader.createCell(9).setCellValue("Кол-во спринтов до Протестировано");
+            summaryHeader.createCell(10).setCellValue("Кол-во спринтов до Решена");
+            applyHeaderStyle(summaryHeader, headerStyle, 11);
 
             for (TransitionLeadTimeSummaryRow row : summaryRows) {
                 Row x = summarySheet.createRow(summaryRowNum++);
@@ -115,6 +116,8 @@ public class ExcelTransitionLeadTimeReportServiceImpl implements ExcelTransition
                 x.createCell(8).setCellValue(reopenedFromReviewCount);
                 long sprintCount = row.getSprintCount() == null ? 0 : row.getSprintCount();
                 x.createCell(9).setCellValue(sprintCount);
+                long resolvedSprintCount = row.getResolvedSprintCount() == null ? 0 : row.getResolvedSprintCount();
+                x.createCell(10).setCellValue(resolvedSprintCount);
 
                 if (reopenedFromReviewCount >= 5) {
                     x.getCell(8).setCellStyle(redTextStyle);
@@ -127,10 +130,16 @@ public class ExcelTransitionLeadTimeReportServiceImpl implements ExcelTransition
                 } else if (sprintCount >= 3) {
                     x.getCell(9).setCellStyle(orangeTextStyle);
                 }
+
+                if (resolvedSprintCount >= 5) {
+                    x.getCell(10).setCellStyle(redTextStyle);
+                } else if (resolvedSprintCount >= 2) {
+                    x.getCell(10).setCellStyle(orangeTextStyle);
+                }
             }
 
-            summarySheet.setAutoFilter(new CellRangeAddress(summaryHeader.getRowNum(), summaryHeader.getRowNum(), 0, 9));
-            autoSizeColumns(summarySheet, 10);
+            summarySheet.setAutoFilter(new CellRangeAddress(summaryHeader.getRowNum(), summaryHeader.getRowNum(), 0, 10));
+            autoSizeColumns(summarySheet, 11);
             summarySheet.setColumnWidth(0, 35 * 256);
             summarySheet.setColumnWidth(2, 60 * 256);
 

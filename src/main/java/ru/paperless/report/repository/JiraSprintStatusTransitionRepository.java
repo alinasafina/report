@@ -479,6 +479,38 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
              and m.transition_date <= b.end_date
             group by b.employee, b.issue_key
         ),
+        last_resolved as (
+            select
+                m.employee,
+                m.issue_key,
+                max(m.transition_date) as resolved_end_date
+            from matched m
+            join first_open fo
+              on fo.employee = m.employee
+             and fo.issue_key = m.issue_key
+            where (
+                    m.to_status_id = 13936
+                    or lower(coalesce(m.to_status_name, '')) = 'решена'
+                  )
+              and m.transition_date >= fo.start_date
+            group by m.employee, m.issue_key
+        ),
+        resolved_sprint_counts as (
+            select
+                lr.employee,
+                lr.issue_key,
+                count(distinct m.sprint_id) as resolved_sprint_count
+            from last_resolved lr
+            join matched m
+              on m.employee = lr.employee
+             and m.issue_key = lr.issue_key
+             and m.transition_date <= lr.resolved_end_date
+            join first_open fo
+              on fo.employee = lr.employee
+             and fo.issue_key = lr.issue_key
+             and m.transition_date >= fo.start_date
+            group by lr.employee, lr.issue_key
+        ),
         reopened_counts as (
             select
                 b.employee,
@@ -519,12 +551,16 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
             b.start_date as startDate,
             b.end_date as endDate,
             sc.sprint_count as sprintCount,
+            coalesce(rsc.resolved_sprint_count, 0) as resolvedSprintCount,
             coalesce(rc.reopened_count, 0) as reopenedCount,
             coalesce(rfrc.reopened_from_review_count, 0) as reopenedFromReviewCount
         from boundaries b
         join sprint_counts sc
           on sc.employee = b.employee
          and sc.issue_key = b.issue_key
+        left join resolved_sprint_counts rsc
+          on rsc.employee = b.employee
+         and rsc.issue_key = b.issue_key
         left join reopened_counts rc
           on rc.employee = b.employee
          and rc.issue_key = b.issue_key
