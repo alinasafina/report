@@ -231,7 +231,9 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             sh.createCell(4).setCellValue("Разработка не завершена (из плана)");
             sh.createCell(5).setCellValue("Вне плана");
             sh.createCell(6).setCellValue("% завершения плана");
-            for (int i = 0; i < 7; i++) {
+            sh.createCell(7).setCellValue("Разработка завершена (внеплана)");
+            sh.createCell(8).setCellValue("% завершения с учетом внеплана");
+            for (int i = 0; i < 9; i++) {
                 sh.getCell(i).setCellStyle(headerStyle);
             }
 
@@ -243,6 +245,7 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                 x.createCell(3).setCellValue(row.getDoneTasksCount() == null ? 0 : row.getDoneTasksCount());
                 x.createCell(4).setCellValue(row.getNotClosedTasksCount() == null ? 0 : row.getNotClosedTasksCount());
                 x.createCell(5).setCellValue(row.getOutOfPlanTasksCount() == null ? 0 : row.getOutOfPlanTasksCount());
+                x.createCell(7).setCellValue(row.getOutOfPlanDoneTasksCount() == null ? 0 : row.getOutOfPlanDoneTasksCount());
 
                 long plannedCount = row.getPlannedTasksCount() == null ? 0 : row.getPlannedTasksCount();
                 long doneCount = row.getDoneTasksCount() == null ? 0 : row.getDoneTasksCount();
@@ -256,10 +259,24 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                 } else {
                     percentCell.setCellStyle(percentStyle);
                 }
+
+                long outOfPlanDoneCount = row.getOutOfPlanDoneTasksCount() == null ? 0 : row.getOutOfPlanDoneTasksCount();
+                double doneWithOutOfPlanRatio = plannedCount > 0
+                        ? (double) (doneCount + outOfPlanDoneCount) / plannedCount
+                        : 0d;
+                var percentWithOutOfPlanCell = x.createCell(8);
+                percentWithOutOfPlanCell.setCellValue(doneWithOutOfPlanRatio);
+                if (doneWithOutOfPlanRatio < 0.5d) {
+                    percentWithOutOfPlanCell.setCellStyle(redPercentStyle);
+                } else if (doneWithOutOfPlanRatio < 0.75d) {
+                    percentWithOutOfPlanCell.setCellStyle(orangePercentStyle);
+                } else {
+                    percentWithOutOfPlanCell.setCellStyle(percentStyle);
+                }
             }
 
-            s2.setAutoFilter(new CellRangeAddress(sh.getRowNum(), sh.getRowNum(), 0, 6));
-            for (int i = 0; i < 7; i++) s2.autoSizeColumn(i);
+            s2.setAutoFilter(new CellRangeAddress(sh.getRowNum(), sh.getRowNum(), 0, 8));
+            for (int i = 0; i < 9; i++) s2.autoSizeColumn(i);
 
             wb.setSheetOrder("1.1 План-факт кол-во задач", 0);
             wb.setSheetOrder("1.2 План-факт задачи", 1);
@@ -331,6 +348,7 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             long doneTasksCount;
             long notClosedTasksCount;
             long outOfPlanTasksCount;
+            long outOfPlanDoneTasksCount;
         }
 
         Set<String> doneStatuses = new HashSet<>(f.doneStatusNamesOriginal());
@@ -342,15 +360,20 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
             SummaryAcc acc = aggregated.computeIfAbsent(key, k -> new SummaryAcc());
 
             boolean coveredByPlannedPreq = Boolean.TRUE.equals(row.getCoveredByPlannedPreq());
+            boolean isDone = StringUtils.hasText(row.getStatusAtSprintEnd())
+                    && doneStatuses.contains(row.getStatusAtSprintEnd());
 
             if (Boolean.TRUE.equals(row.getOutOfPlan()) && !coveredByPlannedPreq) {
                 acc.outOfPlanTasksCount++;
+                if (isDone) {
+                    acc.outOfPlanDoneTasksCount++;
+                }
                 continue;
             }
 
             acc.plannedTasksCount++;
 
-            if (StringUtils.hasText(row.getStatusAtSprintEnd()) && doneStatuses.contains(row.getStatusAtSprintEnd())) {
+            if (isDone) {
                 acc.doneTasksCount++;
             }
             if (StringUtils.hasText(row.getStatusAtSprintEnd()) && notClosedStatuses.contains(row.getStatusAtSprintEnd())) {
@@ -371,7 +394,8 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                         e.getValue().plannedTasksCount,
                         e.getValue().doneTasksCount,
                         e.getValue().notClosedTasksCount,
-                        e.getValue().outOfPlanTasksCount
+                        e.getValue().outOfPlanTasksCount,
+                        e.getValue().outOfPlanDoneTasksCount
                 ))
                 .toList();
     }

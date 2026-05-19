@@ -11,6 +11,7 @@ public class TempoPlannedSummaryRow {
     private Long doneTasksCount; // задач в "done" статусах (по фильтру)
     private Long notClosedTasksCount;   //задач в "не закрыто" статусах
     private Long outOfPlanTasksCount;   //задач вне плана
+    private Long outOfPlanDoneTasksCount;   //внеплановых задач в "done" статусах
 
     public TempoPlannedSummaryRow(String employee,
                                   Long sprintId,
@@ -18,7 +19,7 @@ public class TempoPlannedSummaryRow {
                                   Long plannedTasksCount,
                                   Long doneTasksCount,
                                   Long notClosedTasksCount) {
-        this(employee, sprintId, sprintName, plannedTasksCount, doneTasksCount, notClosedTasksCount, 0L);
+        this(employee, sprintId, sprintName, plannedTasksCount, doneTasksCount, notClosedTasksCount, 0L, 0L);
     }
 
     public TempoPlannedSummaryRow(String employee,
@@ -27,7 +28,8 @@ public class TempoPlannedSummaryRow {
                                   Long plannedTasksCount,
                                   Long doneTasksCount,
                                   Long notClosedTasksCount,
-                                  Long outOfPlanTasksCount) {
+                                  Long outOfPlanTasksCount,
+                                  Long outOfPlanDoneTasksCount) {
         this.employee = employee;
         this.sprintId = sprintId;
         this.sprintName = sprintName;
@@ -35,5 +37,6 @@ public class TempoPlannedSummaryRow {
         this.doneTasksCount = doneTasksCount;
         this.notClosedTasksCount = notClosedTasksCount;
         this.outOfPlanTasksCount = outOfPlanTasksCount;
+        this.outOfPlanDoneTasksCount = outOfPlanDoneTasksCount;
     }
 }
