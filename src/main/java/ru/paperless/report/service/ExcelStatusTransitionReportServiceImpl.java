@@ -170,7 +170,7 @@ public class ExcelStatusTransitionReportServiceImpl implements ExcelStatusTransi
                                 List<TransitionDetailRow> detailRows,
                                 Filter filter,
                                 Map<Long, String> statusNamesById) {
-        Sheet sheet = wb.createSheet("2.2 Возвраты по задачам");
+        Sheet sheet = wb.createSheet("2.2 Возвраты в Review");
         int r = writeMeta(sheet, filter, statusNamesById);
 
         Row header = sheet.createRow(r++);
