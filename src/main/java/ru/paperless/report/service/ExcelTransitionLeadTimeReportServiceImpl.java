@@ -94,13 +94,11 @@ public class ExcelTransitionLeadTimeReportServiceImpl implements ExcelTransition
             summaryHeader.createCell(2).setCellValue("Название задачи");
             summaryHeader.createCell(3).setCellValue("Первый спринт");
             summaryHeader.createCell(4).setCellValue("Последний спринт");
-            summaryHeader.createCell(5).setCellValue("Дата первого Open");
-            summaryHeader.createCell(6).setCellValue("Дата последнего перехода в Протестировано");
-            summaryHeader.createCell(7).setCellValue("Количество переоткрытий");
-            summaryHeader.createCell(8).setCellValue("Переоткрыто из Review");
-            summaryHeader.createCell(9).setCellValue("Кол-во спринтов до Протестировано");
-            summaryHeader.createCell(10).setCellValue("Кол-во спринтов до Решена");
-            applyHeaderStyle(summaryHeader, headerStyle, 11);
+            summaryHeader.createCell(5).setCellValue("Количество переоткрытий");
+            summaryHeader.createCell(6).setCellValue("Переоткрыто из Review");
+            summaryHeader.createCell(7).setCellValue("Кол-во спринтов до Протестировано");
+            summaryHeader.createCell(8).setCellValue("Кол-во спринтов до Решена");
+            applyHeaderStyle(summaryHeader, headerStyle, 9);
 
             for (TransitionLeadTimeSummaryRow row : summaryRows) {
                 Row x = summarySheet.createRow(summaryRowNum++);
@@ -109,37 +107,35 @@ public class ExcelTransitionLeadTimeReportServiceImpl implements ExcelTransition
                 x.createCell(2).setCellValue(nullSafe(row.getIssueSummary()));
                 x.createCell(3).setCellValue(nullSafe(row.getStartSprintName()));
                 x.createCell(4).setCellValue(nullSafe(row.getEndSprintName()));
-                x.createCell(5).setCellValue(formatDate(row.getStartDate()));
-                x.createCell(6).setCellValue(formatDate(row.getEndDate()));
-                x.createCell(7).setCellValue(row.getReopenedCount() == null ? 0 : row.getReopenedCount());
+                x.createCell(5).setCellValue(row.getReopenedCount() == null ? 0 : row.getReopenedCount());
                 long reopenedFromReviewCount = row.getReopenedFromReviewCount() == null ? 0 : row.getReopenedFromReviewCount();
-                x.createCell(8).setCellValue(reopenedFromReviewCount);
+                x.createCell(6).setCellValue(reopenedFromReviewCount);
                 long sprintCount = row.getSprintCount() == null ? 0 : row.getSprintCount();
-                x.createCell(9).setCellValue(sprintCount);
+                x.createCell(7).setCellValue(sprintCount);
                 long resolvedSprintCount = row.getResolvedSprintCount() == null ? 0 : row.getResolvedSprintCount();
-                x.createCell(10).setCellValue(resolvedSprintCount);
+                x.createCell(8).setCellValue(resolvedSprintCount);
 
                 if (reopenedFromReviewCount >= 5) {
-                    x.getCell(8).setCellStyle(redTextStyle);
+                    x.getCell(6).setCellStyle(redTextStyle);
                 } else if (reopenedFromReviewCount >= 3) {
-                    x.getCell(8).setCellStyle(orangeTextStyle);
+                    x.getCell(6).setCellStyle(orangeTextStyle);
                 }
 
                 if (sprintCount >= 5) {
-                    x.getCell(9).setCellStyle(redTextStyle);
+                    x.getCell(7).setCellStyle(redTextStyle);
                 } else if (sprintCount >= 3) {
-                    x.getCell(9).setCellStyle(orangeTextStyle);
+                    x.getCell(7).setCellStyle(orangeTextStyle);
                 }
 
                 if (resolvedSprintCount >= 5) {
-                    x.getCell(10).setCellStyle(redTextStyle);
+                    x.getCell(8).setCellStyle(redTextStyle);
                 } else if (resolvedSprintCount >= 2) {
-                    x.getCell(10).setCellStyle(orangeTextStyle);
+                    x.getCell(8).setCellStyle(orangeTextStyle);
                 }
             }
 
-            summarySheet.setAutoFilter(new CellRangeAddress(summaryHeader.getRowNum(), summaryHeader.getRowNum(), 0, 10));
-            autoSizeColumns(summarySheet, 11);
+            summarySheet.setAutoFilter(new CellRangeAddress(summaryHeader.getRowNum(), summaryHeader.getRowNum(), 0, 8));
+            autoSizeColumns(summarySheet, 9);
             summarySheet.setColumnWidth(0, 35 * 256);
             summarySheet.setColumnWidth(2, 60 * 256);
 

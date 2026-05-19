@@ -54,8 +54,14 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             Font boldFont = wb.createFont();
             boldFont.setBold(true);
 
+            Font orangeFont = wb.createFont();
+            orangeFont.setColor(IndexedColors.ORANGE.getIndex());
+
             CellStyle headerStyle = wb.createCellStyle();
             headerStyle.setFont(boldFont);
+
+            CellStyle orangeTextStyle = wb.createCellStyle();
+            orangeTextStyle.setFont(orangeFont);
 
             // ===================== Sheet 1: Summary =====================
             Sheet s1 = wb.createSheet("4.2 Соотвествия оценке по спринтам");
@@ -125,6 +131,9 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
 
                 Cell percentCell = x.createCell(7);
                 setPercentFromEstimate(percentCell, row.getFirstEstimateHours(), row.getLoggedHours());
+                if (percentCell.getCellType() == CellType.NUMERIC && percentCell.getNumericCellValue() > 130d) {
+                    percentCell.setCellStyle(orangeTextStyle);
+                }
             }
 
             int dataEndRow = r2 - 1;
