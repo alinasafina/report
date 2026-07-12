@@ -26,17 +26,24 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
         Long[] sprintArr = sprintIds.toArray(Long[]::new);
         boolean sprintsEmpty = sprintArr.length == 0;
 
-        List<EffortReportRow> detailRows = repo.getEffortReport(sprintArr, sprintsEmpty);
+        // из БД приходит по одной строке на каждое списание (worklog)
+        List<EffortReportRow> rawRows = repo.getEffortReport(sprintArr, sprintsEmpty);
 
-        List<SummaryRow> summaryByEmployeeSprint = aggregateByEmployeeSprint(detailRows);
+        // 4.3: одна строка на (сотрудник + задача), часы просуммированы по issue_key
+        List<IssueRow> issueRows = aggregateByEmployeeIssue(rawRows);
+
+        // 4.2: строится на основе 4.3 — одна строка на (сотрудник + спринт)
+        List<SummaryRow> summaryByEmployeeSprint = aggregateByEmployeeSprint(issueRows);
+
+        // 4.1: строится на основе 4.2 — одна строка на сотрудника
         List<EmployeeTotalRow> totalsByEmployee = aggregateTotalsByEmployee(summaryByEmployeeSprint);
 
         // список спринтов считаем по sprint_first
-        List<SprintRow> usedSprints = extractUsedSprints(detailRows);
+        List<SprintRow> usedSprints = extractUsedSprints(issueRows);
 
         return toXlsxBytes(
                 summaryByEmployeeSprint,
-                detailRows,
+                issueRows,
                 usedSprints,
                 totalsByEmployee,
                 sprintIdsText
@@ -44,7 +51,7 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
     }
 
     private byte[] toXlsxBytes(List<SummaryRow> summaryRows,
-                               List<EffortReportRow> detailRows,
+                               List<IssueRow> issueRows,
                                List<SprintRow> usedSprints,
                                List<EmployeeTotalRow> totalsByEmployee,
                                String sprintIdsTextOriginal) {
@@ -70,12 +77,11 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             Row h1 = s1.createRow(r1++);
             h1.createCell(0).setCellValue("Сотрудник");
             h1.createCell(1).setCellValue("Спринт (first)");
-            h1.createCell(2).setCellValue("Спринт (last logged)");
-            h1.createCell(3).setCellValue("Соответсвует оценке");
-            h1.createCell(4).setCellValue("Несоответсвует оценке");
-            h1.createCell(5).setCellValue("Без оценки разработки");
-            h1.createCell(6).setCellValue("Незатрекано время");
-            for (int i = 0; i <= 6; i++) {
+            h1.createCell(2).setCellValue("Соответсвует оценке");
+            h1.createCell(3).setCellValue("Несоответсвует оценке");
+            h1.createCell(4).setCellValue("Без оценки разработки");
+            h1.createCell(5).setCellValue("Незатрекано время");
+            for (int i = 0; i <= 5; i++) {
                 h1.getCell(i).setCellStyle(headerStyle);
             }
 
@@ -83,15 +89,14 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
                 Row x = s1.createRow(r1++);
                 x.createCell(0).setCellValue(nullSafe(sr.employee));
                 x.createCell(1).setCellValue(nullSafe(sr.sprintFirstName));
-                x.createCell(2).setCellValue(nullSafe(sr.sprintLastLoggedName));
-                x.createCell(3).setCellValue(sr.loggedLeFirstCount);
-                x.createCell(4).setCellValue(sr.loggedGtFirstCount);
-                x.createCell(5).setCellValue(sr.firstEqZeroCount);
-                x.createCell(6).setCellValue(sr.zeroLoggedWithEstimateCount);
+                x.createCell(2).setCellValue(sr.loggedLeFirstCount);
+                x.createCell(3).setCellValue(sr.loggedGtFirstCount);
+                x.createCell(4).setCellValue(sr.firstEqZeroCount);
+                x.createCell(5).setCellValue(sr.zeroLoggedWithEstimateCount);
             }
 
-            s1.setAutoFilter(new CellRangeAddress(h1.getRowNum(), h1.getRowNum(), 0, 6));
-            for (int i = 0; i <= 6; i++) s1.autoSizeColumn(i);
+            s1.setAutoFilter(new CellRangeAddress(h1.getRowNum(), h1.getRowNum(), 0, 5));
+            for (int i = 0; i <= 5; i++) s1.autoSizeColumn(i);
 
             // ===================== Sheet 2: Details =====================
             Sheet s2 = wb.createSheet("4.3 Соответсвия оценке по задачам");
@@ -114,30 +119,30 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             int estCellIndex = 5;
             int logCellIndex = 6;
 
-            for (EffortReportRow row : detailRows) {
+            for (IssueRow row : issueRows) {
                 Row x = s2.createRow(r2++);
 
-                x.createCell(0).setCellValue(nullSafe(row.getEmployee()));
-                x.createCell(1).setCellValue(nullSafe(row.getSprintFirstName()));
-                x.createCell(2).setCellValue(nullSafe(row.getSprintLastLoggedName()));
-                x.createCell(3).setCellValue(nullSafe(row.getIssueKey()));
-                x.createCell(4).setCellValue(nullSafe(row.getEpicKey()));
+                x.createCell(0).setCellValue(nullSafe(row.employee));
+                x.createCell(1).setCellValue(nullSafe(row.sprintFirstName));
+                x.createCell(2).setCellValue(nullSafe(row.sprintLastLoggedName));
+                x.createCell(3).setCellValue(nullSafe(row.issueKey));
+                x.createCell(4).setCellValue(nullSafe(row.epicKey));
 
                 Cell estCell = x.createCell(estCellIndex);
-                setNumeric(estCell, row.getFirstEstimateHours());
+                setNumeric(estCell, row.firstEstimateHours);
 
                 Cell logCell = x.createCell(logCellIndex);
-                setNumeric(logCell, row.getLoggedHours());
+                setNumeric(logCell, row.loggedHours);
 
                 Cell percentCell = x.createCell(7);
-                setPercentFromEstimate(percentCell, row.getFirstEstimateHours(), row.getLoggedHours());
+                setPercentFromEstimate(percentCell, row.firstEstimateHours, row.loggedHours);
                 if (percentCell.getCellType() == CellType.NUMERIC && percentCell.getNumericCellValue() > 130d) {
                     percentCell.setCellStyle(orangeTextStyle);
                 }
             }
 
             int dataEndRow = r2 - 1;
-            if (!detailRows.isEmpty()) {
+            if (!issueRows.isEmpty()) {
                 applyConditionalFormattingForDetails(s2, dataStartRow, dataEndRow, estCellIndex, logCellIndex);
             }
             s2.setAutoFilter(new CellRangeAddress(h2.getRowNum(), h2.getRowNum(), 0, 7));
@@ -268,24 +273,72 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
     // ===================== Aggregations =====================
 
     /**
-     * Summary: employee + sprint_first + sprint_last_logged
-     * (иначе на уровне одного sprint_first может быть много разных sprint_last_logged, и будет “каша”)
+     * Лист 4.3: одна строка на (сотрудник + задача).
+     * Все списания сотрудника по задаче суммируются в logged_hours, оценка берётся одна на задачу.
      */
-    private List<SummaryRow> aggregateByEmployeeSprint(List<EffortReportRow> rows) {
-        Map<SummaryKey, SummaryAcc> map = new LinkedHashMap<>();
+    private List<IssueRow> aggregateByEmployeeIssue(List<EffortReportRow> rows) {
+        Map<IssueKey, IssueAcc> map = new LinkedHashMap<>();
 
         for (EffortReportRow r : rows) {
+            IssueKey key = new IssueKey(nullSafe(r.getEmployee()), nullSafe(r.getIssueKey()));
+            IssueAcc acc = map.computeIfAbsent(key, k -> new IssueAcc());
+
+            acc.logged = acc.logged.add(nvl(r.getLoggedHours()));
+
+            // оценка одна на задачу — берём максимальную из строк списаний
+            BigDecimal est = nvl(r.getFirstEstimateHours());
+            if (est.compareTo(acc.firstEstimate) > 0) acc.firstEstimate = est;
+
+            if (acc.sprintFirstId == null && r.getSprintFirstId() != null) {
+                acc.sprintFirstId = r.getSprintFirstId();
+                acc.sprintFirstName = nullSafe(r.getSprintFirstName());
+            }
+            // спринт последнего списания — с максимальным id
+            if (r.getSprintLastLoggedId() != null
+                    && (acc.sprintLastLoggedId == null || r.getSprintLastLoggedId() > acc.sprintLastLoggedId)) {
+                acc.sprintLastLoggedId = r.getSprintLastLoggedId();
+                acc.sprintLastLoggedName = nullSafe(r.getSprintLastLoggedName());
+            }
+            if (acc.epicKey == null && StringUtils.hasText(r.getEpicKey())) {
+                acc.epicKey = r.getEpicKey();
+            }
+        }
+
+        List<IssueRow> out = new ArrayList<>(map.size());
+        for (Map.Entry<IssueKey, IssueAcc> e : map.entrySet()) {
+            IssueKey k = e.getKey();
+            IssueAcc a = e.getValue();
+            out.add(new IssueRow(
+                    k.employee, a.sprintFirstId, a.sprintFirstName,
+                    a.sprintLastLoggedId, a.sprintLastLoggedName,
+                    k.issueKey, a.epicKey, a.firstEstimate, a.logged
+            ));
+        }
+
+        out.sort(Comparator
+                .comparing((IssueRow x) -> x.employee, Comparator.nullsFirst(String::compareTo))
+                .thenComparing(x -> x.sprintFirstId, Comparator.nullsFirst(Long::compareTo))
+                .thenComparing(x -> x.issueKey, Comparator.nullsFirst(String::compareTo)));
+
+        return out;
+    }
+
+    /**
+     * Лист 4.2 — на основе 4.3: одна строка на (сотрудник + спринт), считаем задачи из 4.3.
+     */
+    private List<SummaryRow> aggregateByEmployeeSprint(List<IssueRow> issueRows) {
+        Map<SummaryKey, SummaryAcc> map = new LinkedHashMap<>();
+
+        for (IssueRow r : issueRows) {
             SummaryKey key = new SummaryKey(
-                    nullSafe(r.getEmployee()),
-                    r.getSprintFirstId(),
-                    nullSafe(r.getSprintFirstName()),
-                    r.getSprintLastLoggedId(),
-                    nullSafe(r.getSprintLastLoggedName())
+                    nullSafe(r.employee),
+                    r.sprintFirstId,
+                    nullSafe(r.sprintFirstName)
             );
             SummaryAcc acc = map.computeIfAbsent(key, k -> new SummaryAcc());
 
-            BigDecimal first = nvl(r.getFirstEstimateHours());
-            BigDecimal logged = nvl(r.getLoggedHours());
+            BigDecimal first = nvl(r.firstEstimateHours);
+            BigDecimal logged = nvl(r.loggedHours);
 
             if (first.compareTo(BigDecimal.ZERO) == 0) {
                 acc.firstEqZero++;
@@ -304,15 +357,13 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             SummaryAcc a = e.getValue();
             out.add(new SummaryRow(
                     k.employee, k.sprintFirstId, k.sprintFirstName,
-                    k.sprintLastLoggedId, k.sprintLastLoggedName,
                     a.loggedLeFirst, a.loggedGtFirst, a.firstEqZero, a.zeroLoggedWithEstimate
             ));
         }
 
         out.sort(Comparator
                 .comparing((SummaryRow x) -> x.employee, Comparator.nullsFirst(String::compareTo))
-                .thenComparing(x -> x.sprintFirstId, Comparator.nullsFirst(Long::compareTo))
-                .thenComparing(x -> x.sprintLastLoggedId, Comparator.nullsFirst(Long::compareTo)));
+                .thenComparing(x -> x.sprintFirstId, Comparator.nullsFirst(Long::compareTo)));
 
         return out;
     }
@@ -347,12 +398,12 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
     }
 
     // Used sprints: distinct from details по sprint_first
-    private List<SprintRow> extractUsedSprints(List<EffortReportRow> detailRows) {
+    private List<SprintRow> extractUsedSprints(List<IssueRow> issueRows) {
         Map<Long, String> map = new LinkedHashMap<>();
-        for (EffortReportRow r : detailRows) {
-            Long id = r.getSprintFirstId();
+        for (IssueRow r : issueRows) {
+            Long id = r.sprintFirstId;
             if (id == null) continue;
-            map.putIfAbsent(id, nullSafe(r.getSprintFirstName()));
+            map.putIfAbsent(id, nullSafe(r.sprintFirstName));
         }
 
         List<SprintRow> out = new ArrayList<>();
@@ -364,9 +415,51 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
         return out;
     }
 
+    /** Ключ строки листа 4.3: сотрудник + задача. */
+    private record IssueKey(String employee, String issueKey) {
+    }
+
+    private static class IssueAcc {
+        BigDecimal logged = BigDecimal.ZERO;
+        BigDecimal firstEstimate = BigDecimal.ZERO;
+        Long sprintFirstId;
+        String sprintFirstName;
+        Long sprintLastLoggedId;
+        String sprintLastLoggedName;
+        String epicKey;
+    }
+
+    /** Строка листа 4.3: сотрудник + задача, часы просуммированы по issue_key. */
+    private static class IssueRow {
+        final String employee;
+        final Long sprintFirstId;
+        final String sprintFirstName;
+        final Long sprintLastLoggedId;
+        final String sprintLastLoggedName;
+        final String issueKey;
+        final String epicKey;
+        final BigDecimal firstEstimateHours;
+        final BigDecimal loggedHours;
+
+        IssueRow(String employee,
+                 Long sprintFirstId, String sprintFirstName,
+                 Long sprintLastLoggedId, String sprintLastLoggedName,
+                 String issueKey, String epicKey,
+                 BigDecimal firstEstimateHours, BigDecimal loggedHours) {
+            this.employee = employee;
+            this.sprintFirstId = sprintFirstId;
+            this.sprintFirstName = sprintFirstName;
+            this.sprintLastLoggedId = sprintLastLoggedId;
+            this.sprintLastLoggedName = sprintLastLoggedName;
+            this.issueKey = issueKey;
+            this.epicKey = epicKey;
+            this.firstEstimateHours = firstEstimateHours;
+            this.loggedHours = loggedHours;
+        }
+    }
+
     private record SummaryKey(String employee,
-                              Long sprintFirstId, String sprintFirstName,
-                              Long sprintLastLoggedId, String sprintLastLoggedName) {
+                              Long sprintFirstId, String sprintFirstName) {
     }
 
     private static class SummaryAcc {
@@ -382,9 +475,6 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
         final Long sprintFirstId;
         final String sprintFirstName;
 
-        final Long sprintLastLoggedId;
-        final String sprintLastLoggedName;
-
         final int loggedLeFirstCount;
         final int loggedGtFirstCount;
         final int firstEqZeroCount;
@@ -392,14 +482,11 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
 
         SummaryRow(String employee,
                    Long sprintFirstId, String sprintFirstName,
-                   Long sprintLastLoggedId, String sprintLastLoggedName,
                    int loggedLeFirstCount, int loggedGtFirstCount, int firstEqZeroCount,
                    int zeroLoggedWithEstimateCount) {
             this.employee = employee;
             this.sprintFirstId = sprintFirstId;
             this.sprintFirstName = sprintFirstName;
-            this.sprintLastLoggedId = sprintLastLoggedId;
-            this.sprintLastLoggedName = sprintLastLoggedName;
             this.loggedLeFirstCount = loggedLeFirstCount;
             this.loggedGtFirstCount = loggedGtFirstCount;
             this.firstEqZeroCount = firstEqZeroCount;
