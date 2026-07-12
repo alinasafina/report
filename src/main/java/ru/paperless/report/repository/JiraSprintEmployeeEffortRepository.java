@@ -24,8 +24,7 @@ public interface JiraSprintEmployeeEffortRepository extends JpaRepository<JiraSp
                 e.logged_hours        AS loggedHours,
                 e.epic_key         AS epicKey
             FROM public.jira_sprint_employee_effort e
-            WHERE (:sprintsEmpty = true OR e.sprint_first_id = ANY(:sprintIds))
-              AND EXISTS (
+            WHERE EXISTS (
                 SELECT 1
                 FROM public.employee emp
                 WHERE btrim(emp.full_name) = btrim(e.employee)
@@ -33,10 +32,7 @@ public interface JiraSprintEmployeeEffortRepository extends JpaRepository<JiraSp
               )
             ORDER BY e.employee, e.sprint_first_id, e.issue_key
             """, nativeQuery = true)
-    List<EffortReportRow> getEffortReport(
-            @Param("sprintIds") Long[] sprintIds,
-            @Param("sprintsEmpty") boolean sprintsEmpty
-    );
+    List<EffortReportRow> getEffortReport();
 
     @Query(value = """
             WITH labeled_tasks AS (

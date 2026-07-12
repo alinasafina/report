@@ -22,12 +22,10 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
 
     @Override
     public byte[] buildXlsx(String sprintIdsText) {
-        List<Long> sprintIds = parseSprintIds(sprintIdsText);
-        Long[] sprintArr = sprintIds.toArray(Long[]::new);
-        boolean sprintsEmpty = sprintArr.length == 0;
-
-        // из БД приходит по одной строке на каждое списание (worklog)
-        List<EffortReportRow> rawRows = repo.getEffortReport(sprintArr, sprintsEmpty);
+        // из БД приходит по одной строке на каждое списание (worklog).
+        // Фильтр только один — сотрудник должен быть в employee с selectable = true.
+        // По спринтам не фильтруем: таблица и так наполняется задачами переданных спринтов.
+        List<EffortReportRow> rawRows = repo.getEffortReport();
 
         // 4.3: одна строка на (сотрудник + задача), часы просуммированы по issue_key
         List<IssueRow> issueRows = aggregateByEmployeeIssue(rawRows);
