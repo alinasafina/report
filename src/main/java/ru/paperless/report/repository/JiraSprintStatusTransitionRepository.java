@@ -393,8 +393,20 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
             @Param("sprintIds") List<Long> sprintIds
     );
 
+    /**
+     * Сводка «сколько спринтов задача шла от стартового статуса до целевого».
+     * Фильтр по спринтам отбирает ЗАДАЧИ (у задачи есть хотя бы один переход в переданных спринтах),
+     * а границы и счётчики считаются по ВСЕМ переходам этих задач — иначе задача, у которой
+     * Open или Tested случился в спринте вне списка, выпадала из отчёта целиком.
+     */
     @Query(value = """
-        with matched as (
+        with scoped_issues as (
+            select distinct t.issue_key
+            from jira_sprint_status_transition t
+            where t.issue_key is not null
+              and (:useSprints = false or t.sprint_id in (:sprintIds))
+        ),
+        matched as (
             select
                 t.id as id,
                 t.final_assignee as employee,
@@ -408,12 +420,12 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
                 coalesce(t.to_status_name, ts.status_name) as to_status_name,
                 t.transition_date as transition_date
             from jira_sprint_status_transition t
+            join scoped_issues si on si.issue_key = t.issue_key
             left join project_jira_status fs on fs.status_id = t.from_status_id
             left join project_jira_status ts on ts.status_id = t.to_status_id
             where t.final_assignee is not null
               and t.final_assignee in (:employees)
               and t.issue_key is not null
-              and (:useSprints = false or t.sprint_id in (:sprintIds))
 
             union all
 
@@ -430,12 +442,12 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
                 coalesce(t.to_status_name, ts.status_name) as to_status_name,
                 t.transition_date as transition_date
             from jira_sprint_status_transition t
+            join scoped_issues si on si.issue_key = t.issue_key
             left join project_jira_status fs on fs.status_id = t.from_status_id
             left join project_jira_status ts on ts.status_id = t.to_status_id
             where t.developer is not null
               and t.developer in (:employees)
               and t.issue_key is not null
-              and (:useSprints = false or t.sprint_id in (:sprintIds))
               and (t.final_assignee is null or t.developer <> t.final_assignee)
         ),
         first_open as (
@@ -504,17 +516,20 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
             order by b.employee, b.issue_key, m.id desc
         ),
         sprint_counts as (
+            -- сколько спринтов задача шла: считаем спринты, чей период пересекается с [start_date, end_date],
+            -- а не спринты, в которых были переходы (иначе спринт «простоя» без переходов не учитывался)
             select
                 b.employee,
                 b.issue_key,
-                count(distinct m.sprint_id) as sprint_count
+                (
+                    select count(*)
+                    from project_jira_sprint ps
+                    where ps.start_date is not null
+                      and ps.end_date is not null
+                      and ps.start_date::timestamptz     <= b.end_date
+                      and (ps.end_date + 1)::timestamptz >  b.start_date
+                ) as sprint_count
             from boundaries b
-            join matched m
-              on m.employee = b.employee
-             and m.issue_key = b.issue_key
-             and m.transition_date >= b.start_date
-             and m.transition_date <= b.end_date
-            group by b.employee, b.issue_key
         ),
         last_resolved as (
             select
@@ -533,20 +548,22 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
             group by m.employee, m.issue_key
         ),
         resolved_sprint_counts as (
+            -- то же самое, но до последнего перехода в «Решена»
             select
                 lr.employee,
                 lr.issue_key,
-                count(distinct m.sprint_id) as resolved_sprint_count
+                (
+                    select count(*)
+                    from project_jira_sprint ps
+                    where ps.start_date is not null
+                      and ps.end_date is not null
+                      and ps.start_date::timestamptz     <= lr.resolved_end_date
+                      and (ps.end_date + 1)::timestamptz >  fo.start_date
+                ) as resolved_sprint_count
             from last_resolved lr
-            join matched m
-              on m.employee = lr.employee
-             and m.issue_key = lr.issue_key
-             and m.transition_date <= lr.resolved_end_date
             join first_open fo
               on fo.employee = lr.employee
              and fo.issue_key = lr.issue_key
-             and m.transition_date >= fo.start_date
-            group by lr.employee, lr.issue_key
         ),
         reopened_counts as (
             select
@@ -622,8 +639,19 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
             @Param("sprintIds") List<Long> sprintIds
     );
 
+    /**
+     * Детализация переходов. Фильтр по спринтам отбирает ЗАДАЧИ (у задачи есть хотя бы один
+     * переход в переданных спринтах), а сами переходы берутся все — иначе жизненный цикл задачи
+     * рвётся и переходы вне переданных спринтов теряются.
+     */
     @Query(value = """
-        with matched as (
+        with scoped_issues as (
+            select distinct t.issue_key
+            from jira_sprint_status_transition t
+            where t.issue_key is not null
+              and (:useSprints = false or t.sprint_id in (:sprintIds))
+        ),
+        matched as (
             select
                 t.id as id,
                 t.final_assignee as employee,
@@ -637,12 +665,12 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
                 coalesce(t.to_status_name, ts.status_name) as to_status_name,
                 t.transition_date as transition_date
             from jira_sprint_status_transition t
+            join scoped_issues si on si.issue_key = t.issue_key
             left join project_jira_status fs on fs.status_id = t.from_status_id
             left join project_jira_status ts on ts.status_id = t.to_status_id
             where t.final_assignee is not null
               and t.final_assignee in (:employees)
               and t.issue_key is not null
-              and (:useSprints = false or t.sprint_id in (:sprintIds))
 
             union all
 
@@ -659,12 +687,12 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
                 coalesce(t.to_status_name, ts.status_name) as to_status_name,
                 t.transition_date as transition_date
             from jira_sprint_status_transition t
+            join scoped_issues si on si.issue_key = t.issue_key
             left join project_jira_status fs on fs.status_id = t.from_status_id
             left join project_jira_status ts on ts.status_id = t.to_status_id
             where t.developer is not null
               and t.developer in (:employees)
               and t.issue_key is not null
-              and (:useSprints = false or t.sprint_id in (:sprintIds))
               and (t.final_assignee is null or t.developer <> t.final_assignee)
         ),
         first_open as (
