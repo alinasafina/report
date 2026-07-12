@@ -45,53 +45,38 @@ public class JiraEffortExportServiceImpl implements JiraEffortExportService {
     @org.springframework.beans.factory.annotation.Value("${jira.project-key}")
     private String projectKey;
 
-    /** Период спринта, переданного на вход (границы берём из project_jira_sprint). */
+    /** Период спринта из project_jira_sprint. Нужен только чтобы проставить спринт списания, фильтра по нему нет. */
     private record SprintPeriod(Long id, String name, OffsetDateTime start, OffsetDateTime endExclusive) {
         boolean contains(OffsetDateTime dt) {
             return dt != null && !dt.isBefore(start) && dt.isBefore(endExclusive);
         }
     }
 
-    /** Накопленные часы сотрудника по всем переданным спринтам + последняя дата логирования. */
-    private static final class EffortAgg {
-        double hours;
-        OffsetDateTime lastLoggedAt;
-        SprintPeriod lastSprint;
-
-        void add(double h, OffsetDateTime loggedAt, SprintPeriod sprint) {
-            hours += h;
-            if (loggedAt != null && (lastLoggedAt == null || loggedAt.isAfter(lastLoggedAt))) {
-                lastLoggedAt = loggedAt;
-                lastSprint = sprint;
-            }
-        }
-    }
-
     @Override
     public int exportEffort(SprintIdsRequest req) throws Exception {
 
-        // 1) selectable employees
+        // 1) мои сотрудники (employee.selectable = true) — единственный фильтр по людям
         Set<String> employeeFilter = employeeRepo.findBySelectableTrue().stream()
                 .map(Employee::getFullName)
                 .filter(StringUtils::hasText)
                 .map(String::trim)
                 .collect(Collectors.toSet());
+        if (employeeFilter.isEmpty()) {
+            log.warn("В employee нет ни одного сотрудника с selectable = true.");
+            return 0;
+        }
 
-        // 2) sprint ids
+        // 2) спринты
         List<Long> sprintIds = generalMethodsService.resolveSprintIds(req);
         if (sprintIds.isEmpty()) {
             log.info("Нет спринтов для обработки.");
             return 0;
         }
 
-        // 2.1) периоды переданных спринтов — именно по ним фильтруем логирование
+        // 2.1) периоды спринтов — только для проставления sprint_last_logged_*, списания по ним НЕ фильтруются
         List<SprintPeriod> periods = loadSprintPeriods(sprintIds);
-        if (periods.isEmpty()) {
-            log.warn("У переданных спринтов {} нет заполненных start_date/end_date — фильтровать логирование не по чему.", sprintIds);
-            return 0;
-        }
 
-        // 3) JQL
+        // 3) все задачи переданных спринтов
         String jql = "project = " + projectKey + " AND Sprint in (" +
                 sprintIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + ")";
         log.info("JQL: {}", jql);
@@ -105,7 +90,7 @@ public class JiraEffortExportServiceImpl implements JiraEffortExportService {
         while (startAt < total) {
             JiraSearchRequest searchReq = JiraSearchRequest.builder()
                     .jql(jql)
-                    .fields(List.of("key", "assignee", developerFieldId))
+                    .fields(List.of("key"))
                     .startAt(startAt)
                     .maxResults(pageSize)
                     .build();
@@ -122,60 +107,66 @@ public class JiraEffortExportServiceImpl implements JiraEffortExportService {
                 String key = issue.getKey();
                 if (!StringUtils.hasText(key)) continue;
 
-                String assigneeFast = generalMethodsService.extractAssigneeDisplayName(issue.getFields());
-                String developerFast = generalMethodsService.extractDeveloperValue(issue.getFields());
-
-                if (!allowByPeopleFilter(assigneeFast, developerFast, employeeFilter)) continue;
-
-                // heavy issue: changelog + assignee + dev + estimate + worklog
-                String fieldsParam = String.join(",", "assignee", sprintFieldId, developerFieldId, estimateFieldId, epicLinkFieldId, "worklog", "summary", "labels");
+                // 4) задача целиком: changelog + поля + worklog
+                String fieldsParam = String.join(",", "assignee", sprintFieldId, developerFieldId, estimateFieldId,
+                        epicLinkFieldId, "worklog", "summary", "labels");
                 JiraIssueResponse full = getIssueWithRetry(key, fieldsParam);
 
-                if (full.getFields().get("summary").toString().toLowerCase().contains("дежурство") ||
-                        full.getFields().get("summary").toString().toLowerCase().contains("консультация")) {
-                    continue;
+                String summary = extractIssueSummary(full);
+                if (summary != null) {
+                    String lower = summary.toLowerCase();
+                    if (lower.contains("дежурство") || lower.contains("консультация")) continue;
                 }
 
                 String assignee = generalMethodsService.extractAssigneeDisplayName(full.getFields());
                 String developer = generalMethodsService.extractDeveloperValue(full.getFields());
-                if (!allowByPeopleFilter(assignee, developer, employeeFilter)) continue;
 
-                // allowed employees = assignee/dev ∩ selectable employees
-                Set<String> issuePeople = generalMethodsService.extractIssuePeople(assignee, developer);
-                Set<String> allowedEmployees = issuePeople.stream()
-                        .filter(employeeFilter::contains)
-                        .collect(Collectors.toSet());
-                if (allowedEmployees.isEmpty()) continue;
-
-                // все worklog'и сотрудника по задаче, попавшие в периоды переданных спринтов,
-                // суммируются в одну строку — без разбивки по спринтам
-                Map<String, EffortAgg> stats = loadLoggedHoursByEmployee(key, allowedEmployees, periods);
-                if (stats.isEmpty()) continue; // в периодах переданных спринтов сотрудники ничего не логировали
+                // 5) все списания по задаче; фильтруем только по автору — мои сотрудники
+                List<JiraWorklogResponse.Worklog> worklogs = loadAllWorklogs(key);
+                if (worklogs.isEmpty()) continue;
 
                 JiraIssueSprintResponse.Sprint firstSprint = resolveFirstSprint(key);
                 Double firstEstimateHours = extractFirstEstimateHoursFromChangelog(full);
+                String epicKey = full.getFields().get(epicLinkFieldId) != null
+                        ? full.getFields().get(epicLinkFieldId).toString()
+                        : null;
+                String labels = extractLabels(full);
 
-                for (Map.Entry<String, EffortAgg> e : stats.entrySet()) {
-                    String employee = e.getKey();
-                    EffortAgg agg = e.getValue();
-                    SprintPeriod lastSprint = agg.lastSprint;
+                for (JiraWorklogResponse.Worklog w : worklogs) {
+                    String author = generalMethodsService.extractAuthorDisplayName(w.getAuthor());
+                    if (!StringUtils.hasText(author)) continue;
+
+                    String employee = author.trim();
+                    if (!employeeFilter.contains(employee)) continue;
+
+                    // дата, за которую разработчик списал часы
+                    OffsetDateTime loggedAt = generalMethodsService.parseOffsetDateTimeSafe(w.getStarted());
+                    if (loggedAt == null) {
+                        loggedAt = generalMethodsService.parseOffsetDateTimeSafe(w.getUpdated());
+                    }
+
+                    int seconds = Optional.ofNullable(w.getTimeSpentSeconds()).orElse(0);
+                    if (seconds == 0) continue;
+
+                    // спринт, в чей период попало списание (null, если ни в один из переданных)
+                    SprintPeriod loggedSprint = findSprintByDate(periods, loggedAt);
 
                     JiraSprintEmployeeEffort row = JiraSprintEmployeeEffort.builder()
                             .projectKey(projectKey)
                             .sprintFirstId(firstSprint != null ? firstSprint.getId() : null)
                             .sprintFirstName(firstSprint != null ? firstSprint.getName() : null)
-                            .sprintLastLoggedId(lastSprint != null ? lastSprint.id() : null)
-                            .sprintLastLoggedName(lastSprint != null ? lastSprint.name() : null)
+                            .sprintLastLoggedId(loggedSprint != null ? loggedSprint.id() : null)
+                            .sprintLastLoggedName(loggedSprint != null ? loggedSprint.name() : null)
                             .issueKey(full.getKey())
-                            .issueSummary(extractIssueSummary(full))
+                            .issueSummary(summary)
                             .assignee(assignee)
                             .developer(developer)
                             .employee(employee)
                             .firstEstimateHours(firstEstimateHours)
-                            .loggedHours(agg.hours)
-                            .collectedAt(agg.lastLoggedAt)
-                            .epicKey(full.getFields().get(epicLinkFieldId) != null ? full.getFields().get(epicLinkFieldId).toString() : null)
-                            .labels(extractLabels(full))
+                            .loggedHours(seconds / 3600.0)
+                            .collectedAt(loggedAt)
+                            .epicKey(epicKey)
+                            .labels(labels)
                             .build();
 
                     toSave.add(row);
@@ -188,57 +179,70 @@ public class JiraEffortExportServiceImpl implements JiraEffortExportService {
         if (toSave.isEmpty()) return 0;
         effortRepo.saveAll(toSave);
 
-        log.info("Сохранено {}", toSave.size());
+        log.info("Сохранено {} списаний", toSave.size());
         return toSave.size();
     }
 
     // -------------------- helpers --------------------
 
-    /**
-     * Границы переданных спринтов из project_jira_sprint.
-     * end_date включительно: конец периода = end_date + 1 день (00:00), сравнение полуинтервалом [start, end).
-     */
+    /** Границы переданных спринтов из project_jira_sprint; end_date включительно. */
     private List<SprintPeriod> loadSprintPeriods(List<Long> sprintIds) {
         List<ProjectJiraSprint> sprints = sprintRepo.findBySprintIds(sprintIds);
 
         List<SprintPeriod> periods = new ArrayList<>();
         for (ProjectJiraSprint s : sprints) {
             if (s.getStartDate() == null || s.getEndDate() == null) {
-                log.warn("Спринт {} ({}) пропущен: не заполнены start_date/end_date", s.getSprintId(), s.getSprintName());
+                log.warn("Спринт {} ({}): не заполнены start_date/end_date, спринт списания по нему не определить",
+                        s.getSprintId(), s.getSprintName());
                 continue;
             }
-            OffsetDateTime start = generalMethodsService.toOffsetStartOfDay(s.getStartDate());
-            OffsetDateTime endExclusive = generalMethodsService.toOffsetStartOfDay(s.getEndDate().plusDays(1));
-            periods.add(new SprintPeriod(s.getSprintId(), s.getSprintName(), start, endExclusive));
+            periods.add(new SprintPeriod(
+                    s.getSprintId(),
+                    s.getSprintName(),
+                    generalMethodsService.toOffsetStartOfDay(s.getStartDate()),
+                    generalMethodsService.toOffsetStartOfDay(s.getEndDate().plusDays(1))
+            ));
         }
         return periods;
     }
 
-    private boolean allowByPeopleFilter(String assignee, String developer, Set<String> filter) {
-        if (filter == null || filter.isEmpty()) return true;
+    private SprintPeriod findSprintByDate(List<SprintPeriod> periods, OffsetDateTime loggedAt) {
+        if (loggedAt == null) return null;
+        return periods.stream()
+                .filter(p -> p.contains(loggedAt))
+                .findFirst()
+                .orElse(null);
+    }
 
-        if (StringUtils.hasText(assignee) && filter.contains(assignee.trim())) return true;
+    /** Все worklog'и задачи, без фильтров. */
+    private List<JiraWorklogResponse.Worklog> loadAllWorklogs(String issueKey) {
+        List<JiraWorklogResponse.Worklog> all = new ArrayList<>();
 
-        if (developer != null && !developer.isBlank()) {
-            for (String part : developer.split("\\|")) {
-                if (filter.contains(part.trim())) return true;
-            }
+        int startAt = 0;
+        int max = 100;
+        int total = Integer.MAX_VALUE;
+
+        while (startAt < total) {
+            JiraWorklogResponse wl = jiraClient.getWorklog(issueKey, startAt, max);
+            total = Optional.ofNullable(wl.getTotal()).orElse(0);
+
+            List<JiraWorklogResponse.Worklog> page = Optional.ofNullable(wl.getWorklogs()).orElse(List.of());
+            if (page.isEmpty()) break;
+
+            all.addAll(page);
+            startAt += max;
         }
-        return false;
+        return all;
     }
 
     private String extractIssueSummary(JiraIssueResponse full) {
-        if (full == null || full.getFields() == null) {
-            return null;
-        }
+        if (full == null || full.getFields() == null) return null;
         Object summary = full.getFields().get("summary");
         return summary != null ? summary.toString() : null;
     }
 
     private String extractLabels(JiraIssueResponse full) {
-        if (full == null || full.getFields() == null) {
-            return null;
-        }
+        if (full == null || full.getFields() == null) return null;
         Object labelsValue = full.getFields().get("labels");
         if (labelsValue instanceof List<?> labelsList) {
             return labelsList.stream()
@@ -262,63 +266,6 @@ public class JiraEffortExportServiceImpl implements JiraEffortExportService {
                 .filter(s -> s.getStartODate() != null && s.getEndDate() != null)
                 .min(Comparator.comparing(JiraIssueSprintResponse.Sprint::getEndDate))
                 .orElse(null);
-    }
-
-    /**
-     * Суммируем списанные часы по issue только для allowedEmployees и только по тем worklog'ам,
-     * дата списания которых (worklog.started — дата, за которую разработчик потратил часы)
-     * попадает в период одного из переданных спринтов.
-     * Результат — одна запись на сотрудника: общая сумма часов по задаче, без разбивки по спринтам.
-     */
-    private Map<String, EffortAgg> loadLoggedHoursByEmployee(String issueKey,
-                                                             Set<String> allowedEmployees,
-                                                             List<SprintPeriod> periods) {
-        Map<String, EffortAgg> result = new HashMap<>();
-
-        int startAt = 0;
-        int max = 100;
-        int total = Integer.MAX_VALUE;
-
-        while (startAt < total) {
-            JiraWorklogResponse wl = jiraClient.getWorklog(issueKey, startAt, max);
-            total = Optional.ofNullable(wl.getTotal()).orElse(0);
-
-            List<JiraWorklogResponse.Worklog> worklogs = Optional.ofNullable(wl.getWorklogs()).orElse(List.of());
-            if (worklogs.isEmpty()) break;
-
-            for (JiraWorklogResponse.Worklog w : worklogs) {
-                String author = generalMethodsService.extractAuthorDisplayName(w.getAuthor());
-                if (!StringUtils.hasText(author)) continue;
-
-                String emp = author.trim();
-                if (!allowedEmployees.contains(emp)) continue;
-
-                // дата, в которую разработчик потратил часы
-                OffsetDateTime loggedAt = generalMethodsService.parseOffsetDateTimeSafe(w.getStarted());
-                if (loggedAt == null) {
-                    loggedAt = generalMethodsService.parseOffsetDateTimeSafe(w.getUpdated());
-                }
-                if (loggedAt == null) continue;
-
-                // фильтр: worklog должен попасть в период одного из переданных спринтов
-                OffsetDateTime finalLoggedAt = loggedAt;
-                SprintPeriod sprint = periods.stream()
-                        .filter(p -> p.contains(finalLoggedAt))
-                        .findFirst()
-                        .orElse(null);
-                if (sprint == null) continue;
-
-                int seconds = Optional.ofNullable(w.getTimeSpentSeconds()).orElse(0);
-                if (seconds == 0) continue;
-
-                result.computeIfAbsent(emp, k -> new EffortAgg())
-                        .add(seconds / 3600.0, loggedAt, sprint);
-            }
-
-            startAt += max;
-        }
-
-        return result;
     }
 
     private Double extractFirstEstimateHoursFromChangelog(JiraIssueResponse full) {
