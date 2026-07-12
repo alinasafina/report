@@ -52,19 +52,17 @@ public class JiraEffortExportServiceImpl implements JiraEffortExportService {
         }
     }
 
-    /** Ключ агрегации: сотрудник + спринт, в период которого попало логирование. */
-    private record EffortKey(String employee, Long sprintId) {
-    }
-
-    /** Накопленные часы сотрудника в рамках одного спринта + дата логирования. */
+    /** Накопленные часы сотрудника по всем переданным спринтам + последняя дата логирования. */
     private static final class EffortAgg {
         double hours;
         OffsetDateTime lastLoggedAt;
+        SprintPeriod lastSprint;
 
-        void add(double h, OffsetDateTime loggedAt) {
+        void add(double h, OffsetDateTime loggedAt, SprintPeriod sprint) {
             hours += h;
             if (loggedAt != null && (lastLoggedAt == null || loggedAt.isAfter(lastLoggedAt))) {
                 lastLoggedAt = loggedAt;
+                lastSprint = sprint;
             }
         }
     }
@@ -92,8 +90,6 @@ public class JiraEffortExportServiceImpl implements JiraEffortExportService {
             log.warn("У переданных спринтов {} нет заполненных start_date/end_date — фильтровать логирование не по чему.", sprintIds);
             return 0;
         }
-        Map<Long, SprintPeriod> periodById = periods.stream()
-                .collect(Collectors.toMap(SprintPeriod::id, p -> p));
 
         // 3) JQL
         String jql = "project = " + projectKey + " AND Sprint in (" +
@@ -151,29 +147,30 @@ public class JiraEffortExportServiceImpl implements JiraEffortExportService {
                         .collect(Collectors.toSet());
                 if (allowedEmployees.isEmpty()) continue;
 
-                // worklog'и, попавшие в периоды переданных спринтов, сгруппированные по (сотрудник, спринт)
-                Map<EffortKey, EffortAgg> stats = loadLoggedHoursByEmployee(key, allowedEmployees, periods);
+                // все worklog'и сотрудника по задаче, попавшие в периоды переданных спринтов,
+                // суммируются в одну строку — без разбивки по спринтам
+                Map<String, EffortAgg> stats = loadLoggedHoursByEmployee(key, allowedEmployees, periods);
                 if (stats.isEmpty()) continue; // в периодах переданных спринтов сотрудники ничего не логировали
 
                 JiraIssueSprintResponse.Sprint firstSprint = resolveFirstSprint(key);
                 Double firstEstimateHours = extractFirstEstimateHoursFromChangelog(full);
 
-                for (Map.Entry<EffortKey, EffortAgg> e : stats.entrySet()) {
-                    EffortKey k = e.getKey();
+                for (Map.Entry<String, EffortAgg> e : stats.entrySet()) {
+                    String employee = e.getKey();
                     EffortAgg agg = e.getValue();
-                    SprintPeriod sprint = periodById.get(k.sprintId());
+                    SprintPeriod lastSprint = agg.lastSprint;
 
                     JiraSprintEmployeeEffort row = JiraSprintEmployeeEffort.builder()
                             .projectKey(projectKey)
                             .sprintFirstId(firstSprint != null ? firstSprint.getId() : null)
                             .sprintFirstName(firstSprint != null ? firstSprint.getName() : null)
-                            .sprintLastLoggedId(sprint != null ? sprint.id() : null)
-                            .sprintLastLoggedName(sprint != null ? sprint.name() : null)
+                            .sprintLastLoggedId(lastSprint != null ? lastSprint.id() : null)
+                            .sprintLastLoggedName(lastSprint != null ? lastSprint.name() : null)
                             .issueKey(full.getKey())
                             .issueSummary(extractIssueSummary(full))
                             .assignee(assignee)
                             .developer(developer)
-                            .employee(k.employee())
+                            .employee(employee)
                             .firstEstimateHours(firstEstimateHours)
                             .loggedHours(agg.hours)
                             .collectedAt(agg.lastLoggedAt)
@@ -271,12 +268,12 @@ public class JiraEffortExportServiceImpl implements JiraEffortExportService {
      * Суммируем списанные часы по issue только для allowedEmployees и только по тем worklog'ам,
      * дата списания которых (worklog.started — дата, за которую разработчик потратил часы)
      * попадает в период одного из переданных спринтов.
-     * Результат сгруппирован по (сотрудник, спринт логирования).
+     * Результат — одна запись на сотрудника: общая сумма часов по задаче, без разбивки по спринтам.
      */
-    private Map<EffortKey, EffortAgg> loadLoggedHoursByEmployee(String issueKey,
-                                                                Set<String> allowedEmployees,
-                                                                List<SprintPeriod> periods) {
-        Map<EffortKey, EffortAgg> result = new HashMap<>();
+    private Map<String, EffortAgg> loadLoggedHoursByEmployee(String issueKey,
+                                                             Set<String> allowedEmployees,
+                                                             List<SprintPeriod> periods) {
+        Map<String, EffortAgg> result = new HashMap<>();
 
         int startAt = 0;
         int max = 100;
@@ -314,8 +311,8 @@ public class JiraEffortExportServiceImpl implements JiraEffortExportService {
                 int seconds = Optional.ofNullable(w.getTimeSpentSeconds()).orElse(0);
                 if (seconds == 0) continue;
 
-                result.computeIfAbsent(new EffortKey(emp, sprint.id()), k -> new EffortAgg())
-                        .add(seconds / 3600.0, loggedAt);
+                result.computeIfAbsent(emp, k -> new EffortAgg())
+                        .add(seconds / 3600.0, loggedAt, sprint);
             }
 
             startAt += max;
