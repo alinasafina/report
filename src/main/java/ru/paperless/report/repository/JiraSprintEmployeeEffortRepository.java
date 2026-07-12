@@ -25,6 +25,12 @@ public interface JiraSprintEmployeeEffortRepository extends JpaRepository<JiraSp
                 e.epic_key         AS epicKey
             FROM public.jira_sprint_employee_effort e
             WHERE (:sprintsEmpty = true OR e.sprint_first_id = ANY(:sprintIds))
+              AND EXISTS (
+                SELECT 1
+                FROM public.employee emp
+                WHERE btrim(emp.full_name) = btrim(e.employee)
+                  AND emp.selectable = true
+              )
             ORDER BY e.employee, e.sprint_first_id, e.issue_key
             """, nativeQuery = true)
     List<EffortReportRow> getEffortReport(
