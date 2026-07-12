@@ -516,18 +516,32 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
             order by b.employee, b.issue_key, m.id desc
         ),
         sprint_counts as (
-            -- сколько спринтов задача шла: считаем спринты, чей период пересекается с [start_date, end_date],
-            -- а не спринты, в которых были переходы (иначе спринт «простоя» без переходов не учитывался)
+            -- сколько спринтов задача шла: спринты, чей период пересекается с [start_date, end_date]
+            -- (чтобы учитывать спринты «простоя» без переходов), ОБЪЕДИНЁННЫЕ со спринтами самих
+            -- переходов задачи (чтобы не терять спринты, которых нет в справочнике project_jira_sprint)
             select
                 b.employee,
                 b.issue_key,
                 (
                     select count(*)
-                    from project_jira_sprint ps
-                    where ps.start_date is not null
-                      and ps.end_date is not null
-                      and ps.start_date::timestamptz     <= b.end_date
-                      and (ps.end_date + 1)::timestamptz >  b.start_date
+                    from (
+                        select ps.sprint_id
+                        from project_jira_sprint ps
+                        where ps.start_date is not null
+                          and ps.end_date is not null
+                          and ps.start_date::timestamptz     <= b.end_date
+                          and (ps.end_date + 1)::timestamptz >  b.start_date
+
+                        union
+
+                        select m2.sprint_id
+                        from matched m2
+                        where m2.employee = b.employee
+                          and m2.issue_key = b.issue_key
+                          and m2.sprint_id is not null
+                          and m2.transition_date >= b.start_date
+                          and m2.transition_date <= b.end_date
+                    ) s
                 ) as sprint_count
             from boundaries b
         ),
@@ -554,11 +568,24 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
                 lr.issue_key,
                 (
                     select count(*)
-                    from project_jira_sprint ps
-                    where ps.start_date is not null
-                      and ps.end_date is not null
-                      and ps.start_date::timestamptz     <= lr.resolved_end_date
-                      and (ps.end_date + 1)::timestamptz >  fo.start_date
+                    from (
+                        select ps.sprint_id
+                        from project_jira_sprint ps
+                        where ps.start_date is not null
+                          and ps.end_date is not null
+                          and ps.start_date::timestamptz     <= lr.resolved_end_date
+                          and (ps.end_date + 1)::timestamptz >  fo.start_date
+
+                        union
+
+                        select m2.sprint_id
+                        from matched m2
+                        where m2.employee = lr.employee
+                          and m2.issue_key = lr.issue_key
+                          and m2.sprint_id is not null
+                          and m2.transition_date >= fo.start_date
+                          and m2.transition_date <= lr.resolved_end_date
+                    ) s
                 ) as resolved_sprint_count
             from last_resolved lr
             join first_open fo
