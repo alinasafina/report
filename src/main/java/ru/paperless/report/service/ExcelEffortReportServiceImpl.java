@@ -27,8 +27,9 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
         // По спринтам не фильтруем: таблица и так наполняется задачами переданных спринтов.
         List<EffortReportRow> rawRows = repo.getEffortReport();
 
-        // 4.3: одна строка на (сотрудник + задача), часы просуммированы по issue_key
-        List<IssueRow> issueRows = aggregateByEmployeeIssue(rawRows);
+        // 4.3: одна строка на (сотрудник + задача), часы просуммированы по issue_key,
+        // и если по задаче списывались несколько человек — остаётся только тот, кто списал больше всех
+        List<IssueRow> issueRows = keepTopEmployeePerIssue(aggregateByEmployeeIssue(rawRows));
 
         // 4.2: строится на основе 4.3 — одна строка на (сотрудник + спринт)
         List<SummaryRow> summaryByEmployeeSprint = aggregateByEmployeeSprint(issueRows);
@@ -313,6 +314,36 @@ public class ExcelEffortReportServiceImpl implements ExcelEffortReportService {
             ));
         }
 
+        out.sort(Comparator
+                .comparing((IssueRow x) -> x.employee, Comparator.nullsFirst(String::compareTo))
+                .thenComparing(x -> x.sprintFirstId, Comparator.nullsFirst(Long::compareTo))
+                .thenComparing(x -> x.issueKey, Comparator.nullsFirst(String::compareTo)));
+
+        return out;
+    }
+
+    /**
+     * Если по задаче списывались несколько сотрудников — оставляем только того,
+     * у кого суммарное списание по этой задаче наибольшее.
+     * При равенстве часов берём первого по алфавиту, чтобы результат был стабильным.
+     */
+    private List<IssueRow> keepTopEmployeePerIssue(List<IssueRow> rows) {
+        Map<String, IssueRow> topByIssue = new LinkedHashMap<>();
+
+        for (IssueRow r : rows) {
+            IssueRow current = topByIssue.get(r.issueKey);
+            if (current == null) {
+                topByIssue.put(r.issueKey, r);
+                continue;
+            }
+
+            int cmp = nvl(r.loggedHours).compareTo(nvl(current.loggedHours));
+            if (cmp > 0 || (cmp == 0 && nullSafe(r.employee).compareTo(nullSafe(current.employee)) < 0)) {
+                topByIssue.put(r.issueKey, r);
+            }
+        }
+
+        List<IssueRow> out = new ArrayList<>(topByIssue.values());
         out.sort(Comparator
                 .comparing((IssueRow x) -> x.employee, Comparator.nullsFirst(String::compareTo))
                 .thenComparing(x -> x.sprintFirstId, Comparator.nullsFirst(Long::compareTo))
