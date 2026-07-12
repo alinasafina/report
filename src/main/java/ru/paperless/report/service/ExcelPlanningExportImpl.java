@@ -56,10 +56,30 @@ public class ExcelPlanningExportImpl implements ExcelPlanningExport {
                 f.useSprints(), f.safeSprintIds()
         );
 
-        List<TempoPlannedDetailRow> details = mergeWithOutOfPlanTasks(plannedDetails, f);
+        List<TempoPlannedDetailRow> details = excludeBySummary(mergeWithOutOfPlanTasks(plannedDetails, f));
         List<TempoPlannedSummaryRow> summary = aggregateSummary(details, f);
 
         return toXlsxBytes(details, summary, f);
+    }
+
+    /** Задачи, в названии которых есть одно из этих слов, в отчёт не попадают. Регистр не важен. */
+    private static final List<String> EXCLUDED_SUMMARY_WORDS = List.of("дежурство", "ревью", "релиз");
+
+    private List<TempoPlannedDetailRow> excludeBySummary(List<TempoPlannedDetailRow> details) {
+        return details.stream()
+                .filter(row -> {
+                    if (!hasExcludedWord(row.getIssueSummary())) return true;
+                    log.info("Задача {} исключена из отчёта по названию: {}", row.getIssueKey(), row.getIssueSummary());
+                    return false;
+                })
+                .toList();
+    }
+
+    private boolean hasExcludedWord(String summary) {
+        if (!StringUtils.hasText(summary)) return false;
+
+        String normalized = summary.toLowerCase();
+        return EXCLUDED_SUMMARY_WORDS.stream().anyMatch(normalized::contains);
     }
 
     private byte[] toXlsxBytes(List<TempoPlannedDetailRow> details,
