@@ -17,6 +17,8 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
     /**
      * Спринт перехода определяется НЕ по t.sprint_id, а по попаданию transition_date
      * в период спринта (project_jira_sprint.start_date .. end_date включительно).
+     * Через lateral + limit 1: если периоды спринтов перекрываются, переход всё равно
+     * относится РОВНО к одному спринту (к тому, что начался позже) — иначе строка дублируется.
      */
     @Query(value = """
     with matched as (
@@ -27,12 +29,17 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
             coalesce(t.from_status_name, fs.status_name) as from_status_name,
             count(*) as cnt
         from jira_sprint_status_transition t
-        join project_jira_sprint s
-          on (:useSprints = false or s.sprint_id in (:sprintIds))
-         and s.start_date is not null
-         and s.end_date is not null
-         and t.transition_date >= s.start_date::timestamptz
-         and t.transition_date <  (s.end_date + 1)::timestamptz
+        join lateral (
+            select ps.sprint_id, ps.sprint_name
+            from project_jira_sprint ps
+            where (:useSprints = false or ps.sprint_id in (:sprintIds))
+              and ps.start_date is not null
+              and ps.end_date is not null
+              and t.transition_date >= ps.start_date::timestamptz
+              and t.transition_date <  (ps.end_date + 1)::timestamptz
+            order by ps.start_date desc, ps.sprint_id desc
+            limit 1
+        ) s on true
         left join project_jira_status fs on fs.status_id = t.from_status_id
         where t.final_assignee is not null
           and t.final_assignee in (:employees)
@@ -49,12 +56,17 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
             coalesce(t.from_status_name, fs.status_name) as from_status_name,
             count(*) as cnt
         from jira_sprint_status_transition t
-        join project_jira_sprint s
-          on (:useSprints = false or s.sprint_id in (:sprintIds))
-         and s.start_date is not null
-         and s.end_date is not null
-         and t.transition_date >= s.start_date::timestamptz
-         and t.transition_date <  (s.end_date + 1)::timestamptz
+        join lateral (
+            select ps.sprint_id, ps.sprint_name
+            from project_jira_sprint ps
+            where (:useSprints = false or ps.sprint_id in (:sprintIds))
+              and ps.start_date is not null
+              and ps.end_date is not null
+              and t.transition_date >= ps.start_date::timestamptz
+              and t.transition_date <  (ps.end_date + 1)::timestamptz
+            order by ps.start_date desc, ps.sprint_id desc
+            limit 1
+        ) s on true
         left join project_jira_status fs on fs.status_id = t.from_status_id
         where t.developer is not null
           and t.developer in (:employees)
@@ -95,12 +107,17 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
             t.developer as developer,
             t.transition_date as transitionDate
         from jira_sprint_status_transition t
-        join project_jira_sprint s
-          on (:useSprints = false or s.sprint_id in (:sprintIds))
-         and s.start_date is not null
-         and s.end_date is not null
-         and t.transition_date >= s.start_date::timestamptz
-         and t.transition_date <  (s.end_date + 1)::timestamptz
+        join lateral (
+            select ps.sprint_id, ps.sprint_name
+            from project_jira_sprint ps
+            where (:useSprints = false or ps.sprint_id in (:sprintIds))
+              and ps.start_date is not null
+              and ps.end_date is not null
+              and t.transition_date >= ps.start_date::timestamptz
+              and t.transition_date <  (ps.end_date + 1)::timestamptz
+            order by ps.start_date desc, ps.sprint_id desc
+            limit 1
+        ) s on true
         left join project_jira_status fs on fs.status_id = t.from_status_id
         left join project_jira_status ts on ts.status_id = t.to_status_id
         where
