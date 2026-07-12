@@ -14,40 +14,54 @@ import ru.paperless.report.entity.JiraSprintStatusTransition;
 import java.util.List;
 
 public interface JiraSprintStatusTransitionRepository extends JpaRepository<JiraSprintStatusTransition, Long> {
+    /**
+     * Спринт перехода определяется НЕ по t.sprint_id, а по попаданию transition_date
+     * в период спринта (project_jira_sprint.start_date .. end_date включительно).
+     */
     @Query(value = """
     with matched as (
         select
             t.final_assignee as employee,
-            t.sprint_id as sprint_id,
-            t.sprint_name as sprint_name,
+            s.sprint_id as sprint_id,
+            s.sprint_name as sprint_name,
             coalesce(t.from_status_name, fs.status_name) as from_status_name,
             count(*) as cnt
         from jira_sprint_status_transition t
+        join project_jira_sprint s
+          on (:useSprints = false or s.sprint_id in (:sprintIds))
+         and s.start_date is not null
+         and s.end_date is not null
+         and t.transition_date >= s.start_date::timestamptz
+         and t.transition_date <  (s.end_date + 1)::timestamptz
         left join project_jira_status fs on fs.status_id = t.from_status_id
         where t.final_assignee is not null
           and t.final_assignee in (:employees)
           and (:useFrom = false or t.from_status_id in (:fromStatusIds))
           and (:useTo   = false or t.to_status_id   in (:toStatusIds))
-          and (:useSprints = false or t.sprint_id in (:sprintIds))
-        group by t.final_assignee, t.sprint_id, t.sprint_name, coalesce(t.from_status_name, fs.status_name)
+        group by t.final_assignee, s.sprint_id, s.sprint_name, coalesce(t.from_status_name, fs.status_name)
 
         union all
 
         select
             t.developer as employee,
-            t.sprint_id as sprint_id,
-            t.sprint_name as sprint_name,
+            s.sprint_id as sprint_id,
+            s.sprint_name as sprint_name,
             coalesce(t.from_status_name, fs.status_name) as from_status_name,
             count(*) as cnt
         from jira_sprint_status_transition t
+        join project_jira_sprint s
+          on (:useSprints = false or s.sprint_id in (:sprintIds))
+         and s.start_date is not null
+         and s.end_date is not null
+         and t.transition_date >= s.start_date::timestamptz
+         and t.transition_date <  (s.end_date + 1)::timestamptz
         left join project_jira_status fs on fs.status_id = t.from_status_id
         where t.developer is not null
           and t.developer in (:employees)
           and (:useFrom = false or t.from_status_id in (:fromStatusIds))
           and (:useTo   = false or t.to_status_id   in (:toStatusIds))
-          and (:useSprints = false or t.sprint_id in (:sprintIds))
           and (t.final_assignee is null or t.developer <> t.final_assignee)
-        group by t.developer, t.sprint_id, t.sprint_name, coalesce(t.from_status_name, fs.status_name)
+        group by t.developer, s.sprint_id, s.sprint_name, coalesce(t.from_status_name, fs.status_name)
     )
     select
         employee as employee,
@@ -70,16 +84,23 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
     );
 
     // --- детализация для 2-го листа ---
+    // Спринт строки определяется по попаданию transition_date в период спринта.
     @Query(value = """
         select
             t.issue_key as issueKey,
-            t.sprint_id as sprintId,
-            t.sprint_name as sprintName,
-            fs.status_name as fromStatusName,
-            ts.status_name as toStatusName,
+            s.sprint_id as sprintId,
+            s.sprint_name as sprintName,
+            coalesce(t.from_status_name, fs.status_name) as fromStatusName,
+            coalesce(t.to_status_name, ts.status_name) as toStatusName,
             t.developer as developer,
             t.transition_date as transitionDate
         from jira_sprint_status_transition t
+        join project_jira_sprint s
+          on (:useSprints = false or s.sprint_id in (:sprintIds))
+         and s.start_date is not null
+         and s.end_date is not null
+         and t.transition_date >= s.start_date::timestamptz
+         and t.transition_date <  (s.end_date + 1)::timestamptz
         left join project_jira_status fs on fs.status_id = t.from_status_id
         left join project_jira_status ts on ts.status_id = t.to_status_id
         where
@@ -88,7 +109,6 @@ public interface JiraSprintStatusTransitionRepository extends JpaRepository<Jira
               (t.developer is not null and t.developer in (:employees)) )
           and (:useFrom = false or t.from_status_id in (:fromStatusIds))
           and (:useTo   = false or t.to_status_id   in (:toStatusIds))
-          and (:useSprints = false or t.sprint_id in (:sprintIds))
         order by t.transition_date desc nulls last, t.issue_key
         """, nativeQuery = true)
     List<TransitionDetailRow> getDetailsByStatusLists(
