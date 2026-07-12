@@ -96,8 +96,8 @@ public class ExcelTransitionLeadTimeReportServiceImpl implements ExcelTransition
             summaryHeader.createCell(4).setCellValue("Последний спринт");
             summaryHeader.createCell(5).setCellValue("Количество переоткрытий");
             summaryHeader.createCell(6).setCellValue("Переоткрыто из Review");
-            summaryHeader.createCell(7).setCellValue("Кол-во спринтов до Протестировано");
-            summaryHeader.createCell(8).setCellValue("Кол-во спринтов до Решена");
+            summaryHeader.createCell(7).setCellValue("Кол-во спринтов до Решена");
+            summaryHeader.createCell(8).setCellValue("Кол-во спринтов до Протестировано");
             applyHeaderStyle(summaryHeader, headerStyle, 9);
 
             for (TransitionLeadTimeSummaryRow row : summaryRows) {
@@ -110,10 +110,10 @@ public class ExcelTransitionLeadTimeReportServiceImpl implements ExcelTransition
                 x.createCell(5).setCellValue(row.getReopenedCount() == null ? 0 : row.getReopenedCount());
                 long reopenedFromReviewCount = row.getReopenedFromReviewCount() == null ? 0 : row.getReopenedFromReviewCount();
                 x.createCell(6).setCellValue(reopenedFromReviewCount);
-                long sprintCount = row.getSprintCount() == null ? 0 : row.getSprintCount();
-                x.createCell(7).setCellValue(sprintCount);
                 long resolvedSprintCount = row.getResolvedSprintCount() == null ? 0 : row.getResolvedSprintCount();
-                x.createCell(8).setCellValue(resolvedSprintCount);
+                x.createCell(7).setCellValue(resolvedSprintCount);
+                long sprintCount = row.getSprintCount() == null ? 0 : row.getSprintCount();
+                x.createCell(8).setCellValue(sprintCount);
 
                 if (reopenedFromReviewCount >= 5) {
                     x.getCell(6).setCellStyle(redTextStyle);
@@ -121,15 +121,15 @@ public class ExcelTransitionLeadTimeReportServiceImpl implements ExcelTransition
                     x.getCell(6).setCellStyle(orangeTextStyle);
                 }
 
-                if (sprintCount >= 5) {
+                if (resolvedSprintCount >= 5) {
                     x.getCell(7).setCellStyle(redTextStyle);
-                } else if (sprintCount >= 3) {
+                } else if (resolvedSprintCount >= 2) {
                     x.getCell(7).setCellStyle(orangeTextStyle);
                 }
 
-                if (resolvedSprintCount >= 5) {
+                if (sprintCount >= 5) {
                     x.getCell(8).setCellStyle(redTextStyle);
-                } else if (resolvedSprintCount >= 2) {
+                } else if (sprintCount >= 3) {
                     x.getCell(8).setCellStyle(orangeTextStyle);
                 }
             }
@@ -137,6 +137,7 @@ public class ExcelTransitionLeadTimeReportServiceImpl implements ExcelTransition
             summarySheet.setAutoFilter(new CellRangeAddress(summaryHeader.getRowNum(), summaryHeader.getRowNum(), 0, 8));
             autoSizeColumns(summarySheet, 9);
             summarySheet.setColumnWidth(0, 35 * 256);
+            summarySheet.setColumnWidth(1, 20 * 256);
             summarySheet.setColumnWidth(2, 60 * 256);
 
             Sheet detailSheet = wb.createSheet("3.2 Переходы задач");
