@@ -3,6 +3,8 @@ package ru.paperless.report.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.OffsetDateTime;
+
 @Getter
 @Setter
 @Builder
@@ -31,4 +33,8 @@ public class JiraSprintEmployeeEffort {
     private Double loggedHours;
     private String epicKey;
     private String labels;
+
+    /** Дата логирования (worklog.started) — по ней задача попадает в спринт. */
+    @Column(name = "collected_at")
+    private OffsetDateTime collectedAt;
 }
